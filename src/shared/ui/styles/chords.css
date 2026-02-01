@@ -1,0 +1,210 @@
+/* ChordPro renderer styles */
+
+.chord-display {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: 1;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chord-display--large {
+  font-size: var(--text-lg);
+}
+
+.chord-display--xlarge {
+  font-size: var(--text-xl);
+}
+
+.chord-line {
+  margin-bottom: var(--space-4);
+}
+
+.chord-line__chords {
+  color: var(--color-chord);
+  font-weight: var(--font-weight-bold);
+  white-space: pre;
+  min-height: 1.2em;
+  letter-spacing: 0.02em;
+}
+
+.chord-line__lyrics {
+  color: var(--color-text-primary);
+  white-space: pre;
+  letter-spacing: 0.01em;
+}
+
+/* Section display */
+.section-display {
+  margin-bottom: var(--space-6);
+}
+
+.section-display__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.section-display__name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-accent-primary);
+  background-color: rgba(99, 102, 241, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.section-display__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.section-note {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-tertiary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--color-warning);
+}
+
+.section-display__content {
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+}
+
+/* Sequence display */
+.sequence-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-6);
+}
+
+.sequence-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.sequence-item__repeat {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.sequence-arrow {
+  color: var(--color-text-muted);
+}
+
+/* Performance mode */
+.performance-mode {
+  background-color: #000;
+  padding: var(--space-6) var(--space-4);
+  min-height: 100vh;
+}
+
+.performance-mode .chord-display {
+  font-size: var(--text-xl);
+}
+
+.performance-mode .chord-line {
+  margin-bottom: var(--space-6);
+}
+
+.performance-mode .section-display__name {
+  font-size: var(--text-base);
+  height: 36px;
+  min-width: 48px;
+}
+
+/* Chord editor */
+.chord-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chord-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-lg);
+}
+
+.chord-editor__textarea {
+  min-height: 200px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  resize: vertical;
+}
+
+/* Chord insert modal */
+.chord-insert {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.chord-insert__input {
+  flex: 1;
+  height: 36px;
+  font-family: var(--font-mono);
+}
+
+/* Transposition controls */
+.transpose-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.transpose-controls__label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.transpose-controls__key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.transpose-controls__key-display {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-chord);
+  min-width: 40px;
+  text-align: center;
+}
+
+.transpose-controls__arrows {
+  display: flex;
+  gap: var(--space-1);
+}

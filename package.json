@@ -1,0 +1,36 @@
+{
+  "name": "lets-worship",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "generate-pwa-assets": "pwa-assets-generator",
+    "check": "vite build && tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.60.0",
+    "@tanstack/react-router": "^1.82.1",
+    "dexie": "^4.0.9",
+    "dexie-react-hooks": "^1.1.7",
+    "firebase": "^12.8.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/router-devtools": "^1.82.1",
+    "@tanstack/router-plugin": "^1.81.9",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "~5.6.2",
+    "vite": "^5.4.10",
+    "vite-plugin-pwa": "^0.21.0",
+    "workbox-window": "^7.1.0"
+  }
+}

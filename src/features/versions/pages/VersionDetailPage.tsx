@@ -1,0 +1,716 @@
+// Version detail/editor page
+
+import { useState, useMemo } from "react";
+import { useParams, useNavigate } from "@tanstack/react-router";
+import { useSong } from "@/features/songs/hooks/useSongs";
+import { useSectionNotes } from "@/features/songs/hooks/useSectionNotes";
+import {
+  useVersion,
+  useUpdateVersion,
+  useDeleteVersion,
+  useTogglePin,
+} from "../hooks/useVersions";
+import {
+  PageHeader,
+  Button,
+  Input,
+  Select,
+  Modal,
+  ConfirmModal,
+  LoadingSpinner,
+  EmptyState,
+  useToast,
+  IconEdit,
+  IconTrash,
+  IconPin,
+  IconPinOff,
+  IconMaximize,
+  IconMinimize,
+  IconYoutube,
+  IconSpotify,
+  IconExternalLink,
+  IconEye,
+  IconEyeOff,
+} from "@/shared/ui";
+import { SectionDisplay, SequenceDisplay } from "../components/ChordRenderer";
+import { TransposeControls } from "../components/TransposeControls";
+import { SectionEditor } from "../components/SectionEditor";
+import { SectionNoteEditor } from "../components/SectionNoteEditor";
+import { SectionNotesDisplay } from "../components/SectionNotesDisplay";
+import type {
+  NoteName,
+  KeySignature,
+  TimeSignature,
+  TonalQuality,
+  ModalMode,
+  SectionBlock,
+  SequenceItem,
+  SectionNoteEntity,
+} from "@/shared/types";
+import {
+  VALID_NOTE_NAMES,
+  VALID_TIME_SIGNATURES,
+  MODAL_MODES,
+} from "@/shared/types/validation";
+
+const NOTE_OPTIONS = VALID_NOTE_NAMES.map((note) => ({
+  value: note,
+  label: note,
+}));
+const TIME_SIG_OPTIONS = VALID_TIME_SIGNATURES.map((ts) => ({
+  value: ts,
+  label: ts,
+}));
+const KEY_TYPE_OPTIONS = [
+  { value: "tonal", label: "Tonal" },
+  { value: "modal", label: "Modal" },
+];
+const TONAL_QUALITY_OPTIONS = [
+  { value: "major", label: "Maior" },
+  { value: "minor", label: "Menor" },
+];
+const MODE_OPTIONS = MODAL_MODES.map((mode) => ({
+  value: mode,
+  label: mode.charAt(0).toUpperCase() + mode.slice(1),
+}));
+
+type ViewMode = "view" | "edit" | "performance";
+
+export function VersionDetailPage() {
+  const { songId, versionId } = useParams({
+    from: "/songs/$songId/versions/$versionId",
+  });
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+
+  const { data: song, isLoading: songLoading } = useSong(songId);
+  const { data: version, isLoading: versionLoading } = useVersion(versionId);
+  const { data: sectionNotes = [] } = useSectionNotes(versionId);
+  const updateVersion = useUpdateVersion();
+  const deleteVersion = useDeleteVersion();
+  const togglePin = useTogglePin();
+
+  const [viewMode, setViewMode] = useState<ViewMode>("view");
+  const [targetKey, setTargetKey] = useState<NoteName | null>(null);
+  const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Visibility preferences
+  const [showLyrics, setShowLyrics] = useState(true);
+  const [showChords, setShowChords] = useState(true);
+  const [showNotes, setShowNotes] = useState(true);
+
+  // Edit state
+  const [editLabel, setEditLabel] = useState("");
+  const [editBpm, setEditBpm] = useState("");
+  const [editTimeSignature, setEditTimeSignature] = useState<
+    TimeSignature | ""
+  >("");
+  const [editKeyType, setEditKeyType] = useState<"tonal" | "modal">("tonal");
+  const [editKeyRoot, setEditKeyRoot] = useState<NoteName | "">("");
+  const [editTonalQuality, setEditTonalQuality] =
+    useState<TonalQuality>("major");
+  const [editMode, setEditMode] = useState<ModalMode>("ionian");
+
+  // Arrangement state
+  const [sections, setSections] = useState<SectionBlock[]>([]);
+  const [sequence, setSequence] = useState<SequenceItem[]>([]);
+  const [hasArrangementChanges, setHasArrangementChanges] = useState(false);
+
+  // Helper to get notes for a specific section
+  const getNotesForSection = (sectionId: string): SectionNoteEntity[] => {
+    return sectionNotes.filter((n) => n.sectionId === sectionId);
+  };
+
+  // Helper to check anchor position (for filtering)
+  const getAnchorPosition = (anchor: {
+    type: string;
+    lineIndex?: number;
+  }): "start" | "general" | "end" => {
+    if (anchor.type === "line") {
+      if (anchor.lineIndex === 0) return "start";
+      if (anchor.lineIndex === -1) return "end";
+    }
+    return "general";
+  };
+
+  // Initialize edit state when version loads
+  useMemo(() => {
+    if (version) {
+      setEditLabel(version.label);
+      setEditBpm(version.musicalMeta.bpm?.toString() || "");
+      setEditTimeSignature(version.musicalMeta.timeSignature || "");
+
+      if (version.musicalMeta.originalKey) {
+        setEditKeyRoot(version.musicalMeta.originalKey.root);
+        if (version.musicalMeta.originalKey.type === "tonal") {
+          setEditKeyType("tonal");
+          setEditTonalQuality(version.musicalMeta.originalKey.tonalQuality);
+        } else {
+          setEditKeyType("modal");
+          setEditMode(version.musicalMeta.originalKey.mode);
+        }
+      }
+
+      setSections(version.arrangement.sections);
+      setSequence(version.arrangement.sequence);
+    }
+  }, [version?.id]);
+
+  // Loading states
+  if (songLoading || versionLoading) {
+    return (
+      <>
+        <PageHeader title="Carregando..." showBack />
+        <LoadingSpinner />
+      </>
+    );
+  }
+
+  if (!song || !version) {
+    return (
+      <>
+        <PageHeader title="Não encontrado" showBack backTo="/songs" />
+        <div className="page">
+          <EmptyState
+            title="Versão não encontrada"
+            description="Esta versão pode ter sido removida."
+            action={
+              <Button onClick={() => navigate({ to: "/songs" })}>
+                Voltar para músicas
+              </Button>
+            }
+          />
+        </div>
+      </>
+    );
+  }
+
+  const handleTogglePin = async () => {
+    try {
+      const isPinned = await togglePin.mutateAsync(version.id);
+      showToast(
+        "success",
+        isPinned ? "Disponível offline" : "Removido do offline",
+      );
+    } catch {
+      showToast("error", "Erro ao atualizar");
+    }
+  };
+
+  const handleSaveArrangement = async () => {
+    try {
+      await updateVersion.mutateAsync({
+        id: version.id,
+        input: {
+          arrangement: { sections, sequence },
+        },
+      });
+      setHasArrangementChanges(false);
+      showToast("success", "Arranjo salvo!");
+    } catch {
+      showToast("error", "Erro ao salvar");
+    }
+  };
+
+  const handleSaveMeta = async () => {
+    let originalKey: KeySignature | null = null;
+    if (editKeyRoot) {
+      if (editKeyType === "tonal") {
+        originalKey = {
+          type: "tonal",
+          root: editKeyRoot,
+          tonalQuality: editTonalQuality,
+        };
+      } else {
+        originalKey = { type: "modal", root: editKeyRoot, mode: editMode };
+      }
+    }
+
+    try {
+      await updateVersion.mutateAsync({
+        id: version.id,
+        input: {
+          label: editLabel.trim(),
+          musicalMeta: {
+            bpm: editBpm ? parseInt(editBpm, 10) : null,
+            timeSignature: editTimeSignature || null,
+            originalKey,
+          },
+        },
+      });
+      setIsMetaModalOpen(false);
+      showToast("success", "Informações atualizadas");
+    } catch {
+      showToast("error", "Erro ao salvar");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteVersion.mutateAsync(version.id);
+      showToast("success", "Versão removida");
+      navigate({ to: "/songs/$songId", params: { songId } });
+    } catch {
+      showToast("error", "Erro ao remover");
+    }
+  };
+
+  const handleSectionsChange = (newSections: SectionBlock[]) => {
+    setSections(newSections);
+    setHasArrangementChanges(true);
+  };
+
+  const handleSequenceChange = (newSequence: SequenceItem[]) => {
+    setSequence(newSequence);
+    setHasArrangementChanges(true);
+  };
+
+  const originalKey = version.musicalMeta.originalKey;
+  const effectiveTargetKey = targetKey || originalKey?.root || null;
+
+  // Build sequence display data
+  const sequenceDisplayData = sequence.map((item) => {
+    const section = sections.find((s) => s.id === item.sectionId);
+    return {
+      sectionId: item.sectionId,
+      sectionName: section?.name || "Unknown",
+      repeat: item.repeat,
+      notes: item.sequenceNotes,
+    };
+  });
+
+  // Performance mode
+  if (viewMode === "performance") {
+    return (
+      <div className="performance-mode">
+        <div className="flex items-center justify-between mb-4 px-4">
+          <div>
+            <h1 className="text-xl font-bold">{song.title}</h1>
+            <p className="text-secondary">{version.label}</p>
+          </div>
+          <Button variant="ghost" onClick={() => setViewMode("view")}>
+            <IconMinimize size={20} />
+            Sair
+          </Button>
+        </div>
+
+        {/* Visibility toggles in performance mode */}
+        <div className="flex gap-2 mb-4 px-4 flex-wrap">
+          <Button
+            variant={showLyrics ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setShowLyrics(!showLyrics)}
+          >
+            {showLyrics ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            Letras
+          </Button>
+          <Button
+            variant={showChords ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setShowChords(!showChords)}
+          >
+            {showChords ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            Acordes
+          </Button>
+          <Button
+            variant={showNotes ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setShowNotes(!showNotes)}
+          >
+            {showNotes ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            Notas
+          </Button>
+        </div>
+
+        {originalKey && (
+          <div className="px-4 mb-6">
+            <TransposeControls
+              originalKey={originalKey}
+              targetKey={effectiveTargetKey}
+              onTargetKeyChange={setTargetKey}
+            />
+          </div>
+        )}
+
+        <SequenceDisplay sequence={sequenceDisplayData} />
+
+        <div className="px-4">
+          {sections.map((section) => {
+            const sectionNotesForSection = getNotesForSection(section.id);
+            return (
+              <div key={section.id}>
+                {/* Start notes */}
+                {showNotes && (
+                  <SectionNotesDisplay
+                    notes={sectionNotesForSection}
+                    filter="start"
+                    compact
+                  />
+                )}
+                <SectionDisplay
+                  name={section.name}
+                  chordProText={section.chordProText}
+                  notes={showNotes ? section.notes : []}
+                  originalKey={originalKey?.root}
+                  targetKey={effectiveTargetKey || undefined}
+                  fontSize="xlarge"
+                  showLyrics={showLyrics}
+                  showChords={showChords}
+                />
+                {/* General and end notes */}
+                {showNotes && (
+                  <SectionNotesDisplay
+                    notes={sectionNotesForSection.filter((n) => {
+                      const pos = getAnchorPosition(n.anchor);
+                      return pos === "general" || pos === "end";
+                    })}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={version.label}
+        showBack
+        backTo={`/songs/${songId}`}
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              isIcon
+              onClick={handleTogglePin}
+              aria-label={
+                version.pinnedOffline ? "Remover offline" : "Baixar offline"
+              }
+            >
+              {version.pinnedOffline ? (
+                <IconPinOff size={20} />
+              ) : (
+                <IconPin size={20} />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              isIcon
+              onClick={() => setIsMetaModalOpen(true)}
+              aria-label="Editar informações"
+            >
+              <IconEdit size={20} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              isIcon
+              onClick={() => setIsDeleteModalOpen(true)}
+              aria-label="Excluir"
+            >
+              <IconTrash size={20} />
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="page">
+        {/* Song title */}
+        <p className="text-secondary mb-4">
+          Música: <strong className="text-primary">{song.title}</strong>
+        </p>
+
+        {/* Meta info */}
+        <div className="card p-4 mb-6">
+          <div className="flex flex-wrap gap-4">
+            {version.musicalMeta.originalKey && (
+              <div>
+                <span className="text-sm text-muted">Tom:</span>
+                <span
+                  className="ml-2 font-semibold"
+                  style={{ color: "var(--color-chord)" }}
+                >
+                  {version.musicalMeta.originalKey.root}
+                  {version.musicalMeta.originalKey.type === "tonal"
+                    ? version.musicalMeta.originalKey.tonalQuality === "minor"
+                      ? "m"
+                      : ""
+                    : ` ${version.musicalMeta.originalKey.mode}`}
+                </span>
+              </div>
+            )}
+            {version.musicalMeta.bpm && (
+              <div>
+                <span className="text-sm text-muted">BPM:</span>
+                <span className="ml-2 font-semibold">
+                  {version.musicalMeta.bpm}
+                </span>
+              </div>
+            )}
+            {version.musicalMeta.timeSignature && (
+              <div>
+                <span className="text-sm text-muted">Compasso:</span>
+                <span className="ml-2 font-semibold">
+                  {version.musicalMeta.timeSignature}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Reference links */}
+          <div className="flex gap-3 mt-4">
+            {version.reference.youtubeUrl && (
+              <a
+                href={version.reference.youtubeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button button--secondary button--sm"
+              >
+                <IconYoutube size={18} />
+                YouTube
+                <IconExternalLink size={14} />
+              </a>
+            )}
+            {version.reference.spotifyUrl && (
+              <a
+                href={version.reference.spotifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button button--secondary button--sm"
+              >
+                <IconSpotify size={18} />
+                Spotify
+                <IconExternalLink size={14} />
+              </a>
+            )}
+          </div>
+          {version.reference.descriptionIfNoLink && (
+            <p className="text-sm text-muted mt-3">
+              {version.reference.descriptionIfNoLink}
+            </p>
+          )}
+        </div>
+
+        {/* View/Edit toggle */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={viewMode === "view" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setViewMode("view")}
+          >
+            <IconEye size={16} />
+            Visualizar
+          </Button>
+          <Button
+            variant={viewMode === "edit" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setViewMode("edit")}
+          >
+            <IconEdit size={16} />
+            Editar
+          </Button>
+          <div style={{ flex: 1 }} />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setViewMode("performance")}
+          >
+            <IconMaximize size={16} />
+            Modo apresentação
+          </Button>
+        </div>
+
+        {/* Transposition controls */}
+        {originalKey && viewMode === "view" && (
+          <TransposeControls
+            originalKey={originalKey}
+            targetKey={effectiveTargetKey}
+            onTargetKeyChange={setTargetKey}
+          />
+        )}
+
+        {/* Content based on mode */}
+        {viewMode === "edit" ? (
+          <>
+            <SectionEditor
+              sections={sections}
+              sequence={sequence}
+              onSectionsChange={handleSectionsChange}
+              onSequenceChange={handleSequenceChange}
+              originalKey={originalKey?.root}
+              targetKey={effectiveTargetKey || undefined}
+            />
+
+            {hasArrangementChanges && (
+              <div className="sticky bottom-24 mt-6">
+                <Button
+                  fullWidth
+                  onClick={handleSaveArrangement}
+                  isLoading={updateVersion.isPending}
+                >
+                  Salvar alterações
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Sequence display */}
+            <SequenceDisplay sequence={sequenceDisplayData} />
+
+            {/* Sections display */}
+            {sections.length === 0 ? (
+              <EmptyState
+                title="Nenhuma seção"
+                description="Adicione seções no modo de edição"
+                action={
+                  <Button onClick={() => setViewMode("edit")}>
+                    <IconEdit size={20} />
+                    Editar arranjo
+                  </Button>
+                }
+              />
+            ) : (
+              sections.map((section) => {
+                const sectionNotesForSection = getNotesForSection(section.id);
+                return (
+                  <div key={section.id}>
+                    <SectionDisplay
+                      name={section.name}
+                      chordProText={section.chordProText}
+                      notes={section.notes}
+                      originalKey={originalKey?.root}
+                      targetKey={effectiveTargetKey || undefined}
+                    />
+                    {/* Section notes display */}
+                    {sectionNotesForSection.length > 0 && (
+                      <SectionNotesDisplay notes={sectionNotesForSection} />
+                    )}
+                    {/* Section note editor */}
+                    <SectionNoteEditor
+                      versionId={versionId}
+                      sectionId={section.id}
+                      sectionNotes={sectionNotesForSection}
+                    />
+                  </div>
+                );
+              })
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Edit Meta Modal */}
+      <Modal
+        isOpen={isMetaModalOpen}
+        onClose={() => setIsMetaModalOpen(false)}
+        title="Editar informações"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsMetaModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveMeta}
+              isLoading={updateVersion.isPending}
+            >
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Nome da versão"
+            value={editLabel}
+            onChange={(e) => setEditLabel(e.target.value)}
+          />
+
+          <div className="form-row">
+            <Input
+              label="BPM"
+              value={editBpm}
+              onChange={(e) => setEditBpm(e.target.value.replace(/\D/g, ""))}
+              type="number"
+            />
+            <Select
+              label="Compasso"
+              options={[
+                { value: "", label: "Selecione..." },
+                ...TIME_SIG_OPTIONS,
+              ]}
+              value={editTimeSignature}
+              onChange={(e) =>
+                setEditTimeSignature(e.target.value as TimeSignature)
+              }
+            />
+          </div>
+
+          <div className="card p-4">
+            <h4 className="text-sm font-medium text-secondary mb-3">
+              Tonalidade
+            </h4>
+            <div className="flex flex-col gap-4">
+              <Select
+                label="Tipo"
+                options={KEY_TYPE_OPTIONS}
+                value={editKeyType}
+                onChange={(e) =>
+                  setEditKeyType(e.target.value as "tonal" | "modal")
+                }
+              />
+              <div className="form-row">
+                <Select
+                  label="Nota raiz"
+                  options={[{ value: "", label: "Nenhuma" }, ...NOTE_OPTIONS]}
+                  value={editKeyRoot}
+                  onChange={(e) => setEditKeyRoot(e.target.value as NoteName)}
+                />
+                {editKeyType === "tonal" ? (
+                  <Select
+                    label="Qualidade"
+                    options={TONAL_QUALITY_OPTIONS}
+                    value={editTonalQuality}
+                    onChange={(e) =>
+                      setEditTonalQuality(e.target.value as TonalQuality)
+                    }
+                    disabled={!editKeyRoot}
+                  />
+                ) : (
+                  <Select
+                    label="Modo"
+                    options={MODE_OPTIONS}
+                    value={editMode}
+                    onChange={(e) => setEditMode(e.target.value as ModalMode)}
+                    disabled={!editKeyRoot}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title="Excluir versão"
+        message={`Tem certeza que deseja excluir a versão "${version.label}"?`}
+        confirmLabel="Excluir"
+        variant="danger"
+        isLoading={deleteVersion.isPending}
+      />
+    </>
+  );
+}
