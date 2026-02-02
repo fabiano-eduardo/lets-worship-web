@@ -173,7 +173,7 @@ class SyncManager {
       );
 
       // Process results
-      for (const result of response.syncPush.results) {
+      for (const result of response.syncPush.applied) {
         const item = pending.find((p) => p.id === result.mutationId);
         if (!item) continue;
 
@@ -203,9 +203,9 @@ class SyncManager {
             await outboxRepository.updateStatus(
               item.id,
               "REJECTED",
-              result.error,
+              result.reason ?? undefined,
             );
-            console.error(`[SyncManager] Mutation rejected: ${result.error}`);
+            console.error(`[SyncManager] Mutation rejected: ${result.reason}`);
             break;
         }
       }

@@ -32,8 +32,6 @@ let auth: Auth | null = null;
 if (validateConfig()) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-
-  console.log({ auth });
 }
 
 export { app, auth };

@@ -3,13 +3,15 @@
 export const SYNC_PUSH_MUTATION = `
   mutation SyncPush($input: SyncPushInput!) {
     syncPush(input: $input) {
-      results {
+      applied {
         mutationId
         status
         entityId
         newRev
-        error
+        reason
+        serverEntity
       }
+      serverTime
     }
   }
 `;
@@ -122,12 +124,14 @@ export interface SyncPushResult {
   status: "APPLIED" | "CONFLICT" | "REJECTED";
   entityId: string;
   newRev?: number;
-  error?: string;
+  reason?: string | null;
+  serverEntity?: Record<string, unknown> | null;
 }
 
 export interface SyncPushResponse {
   syncPush: {
-    results: SyncPushResult[];
+    applied: SyncPushResult[];
+    serverTime: string;
   };
 }
 
