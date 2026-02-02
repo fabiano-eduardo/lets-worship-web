@@ -1,0 +1,79 @@
+# Version operations
+
+query SongVersion($id: ID!) {
+  songVersion(id: $id) {
+    id
+    songId
+    label
+    arrangement {
+      sections {
+        id
+        name
+        chordProText
+        notes {
+          id
+          sectionId
+          text
+          anchor {
+            type
+            lineIndex
+            wordOffset
+            fromLineIndex
+            toLineIndex
+          }
+        }
+      }
+      sequence {
+        sectionId
+        repeat
+        sequenceNotes
+      }
+    }
+    reference {
+      youtubeUrl
+      spotifyUrl
+      descriptionIfNoLink
+    }
+    musicalMeta {
+      originalKey {
+        root
+        mode
+        type
+        tonalQuality
+      }
+      bpm
+      timeSignature
+    }
+    ownerUid
+    createdAt
+    updatedAt
+    rev
+  }
+}
+
+mutation CreateSongVersion($input: CreateSongVersionInput!) {
+  createSongVersion(input: $input) {
+    id
+    songId
+    label
+    createdAt
+    updatedAt
+    rev
+  }
+}
+
+mutation UpdateSongVersion($id: ID!, $input: UpdateSongVersionInput!) {
+  updateSongVersion(id: $id, input: $input) {
+    id
+    label
+    updatedAt
+    rev
+  }
+}
+
+mutation DeleteSongVersion($id: ID!, $baseRev: Int) {
+  deleteSongVersion(id: $id, baseRev: $baseRev) {
+    id
+    deletedAt
+  }
+}

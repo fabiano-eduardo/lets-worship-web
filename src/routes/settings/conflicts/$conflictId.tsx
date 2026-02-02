@@ -1,8 +1,7 @@
 // Conflict resolution route (protected)
 
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, lazyRouteComponent } from "@tanstack/react-router";
 import { Route as rootRoute } from "../../__root";
-import { ConflictResolutionPage } from "@/features/sync/pages/ConflictResolutionPage";
 import { requireAuth } from "@/app/auth";
 
 export const Route = createRoute({
@@ -11,5 +10,8 @@ export const Route = createRoute({
   beforeLoad: ({ context, location }) => {
     requireAuth(context.auth, location.pathname);
   },
-  component: ConflictResolutionPage,
+  component: lazyRouteComponent(
+    () => import("@/features/sync/pages/ConflictResolutionPage"),
+    "ConflictResolutionPage",
+  ),
 });

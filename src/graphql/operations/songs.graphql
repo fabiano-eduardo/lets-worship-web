@@ -1,0 +1,128 @@
+# Song operations
+
+# Fragment for song fields
+fragment SongFields on Song {
+  id
+  title
+  artist
+  defaultVersionId
+  ownerUid
+  createdAt
+  updatedAt
+  rev
+}
+
+# Fragment for version fields used in lists
+fragment VersionListFields on SongVersion {
+  id
+  songId
+  label
+  musicalMeta {
+    originalKey {
+      root
+      mode
+      type
+      tonalQuality
+    }
+    bpm
+    timeSignature
+  }
+  createdAt
+  updatedAt
+  rev
+}
+
+# Fragment for full version fields
+fragment VersionFields on SongVersion {
+  id
+  songId
+  label
+  arrangement {
+    sections {
+      id
+      name
+      chordProText
+      notes {
+        id
+        sectionId
+        text
+        anchor {
+          type
+          lineIndex
+          wordOffset
+          fromLineIndex
+          toLineIndex
+        }
+      }
+    }
+    sequence {
+      sectionId
+      repeat
+      sequenceNotes
+    }
+  }
+  reference {
+    youtubeUrl
+    spotifyUrl
+    descriptionIfNoLink
+  }
+  musicalMeta {
+    originalKey {
+      root
+      mode
+      type
+      tonalQuality
+    }
+    bpm
+    timeSignature
+  }
+  ownerUid
+  createdAt
+  updatedAt
+  rev
+}
+
+query Songs($cursor: String, $limit: Int, $search: String) {
+  songs(cursor: $cursor, limit: $limit, search: $search) {
+    songs {
+      ...SongFields
+    }
+    nextCursor
+  }
+}
+
+query Song($id: ID!) {
+  song(id: $id) {
+    ...SongFields
+  }
+}
+
+query SongVersions($songId: ID!) {
+  songVersions(songId: $songId) {
+    ...VersionListFields
+  }
+}
+
+mutation CreateSong($input: CreateSongInput!) {
+  createSong(input: $input) {
+    ...SongFields
+  }
+}
+
+mutation UpdateSong($id: ID!, $input: UpdateSongInput!) {
+  updateSong(id: $id, input: $input) {
+    id
+    title
+    artist
+    defaultVersionId
+    updatedAt
+    rev
+  }
+}
+
+mutation DeleteSong($id: ID!, $baseRev: Int) {
+  deleteSong(id: $id, baseRev: $baseRev) {
+    id
+    deletedAt
+  }
+}

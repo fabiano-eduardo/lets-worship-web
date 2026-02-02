@@ -58,8 +58,21 @@ async function getIdToken(): Promise<string> {
     throw new AuthenticationError("User not authenticated");
   }
 
-  // Always get fresh token from SDK (handles refresh automatically)
-  return currentUser.getIdToken();
+  try {
+    // Force refresh to ensure we have a valid token
+    const token = await currentUser.getIdToken(true);
+
+    // Validate token format (Firebase tokens are JWTs with 3 parts)
+    if (!token || token.split(".").length !== 3) {
+      console.error("[GraphQL] Invalid token format received from Firebase");
+      throw new AuthenticationError("Invalid token format");
+    }
+
+    return token;
+  } catch (error) {
+    console.error("[GraphQL] Error getting ID token:", error);
+    throw new AuthenticationError("Failed to get authentication token");
+  }
 }
 
 // Execute GraphQL query/mutation

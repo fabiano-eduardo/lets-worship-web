@@ -40,53 +40,40 @@ export function SongsListPage() {
 
   if (isLoading) {
     return (
-      <>
+      <div className="page">
         <PageHeader title="Músicas" />
         <LoadingSpinner />
-      </>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <>
+      <div className="page">
         <PageHeader title="Músicas" />
-        <div className="page">
-          <EmptyState
-            icon={<IconMusic size={48} />}
-            title="Erro ao carregar"
-            description="Não foi possível carregar as músicas. Tente novamente."
-          />
-        </div>
-      </>
+        <EmptyState
+          icon={<IconMusic size={48} />}
+          title="Erro ao carregar"
+          description="Não foi possível carregar as músicas. Tente novamente."
+        />
+      </div>
     );
   }
 
   return (
     <>
-      <PageHeader title="Músicas" />
-
       <div className="page">
+        <PageHeader title="Músicas" />
+
         {/* Search */}
-        <div className="mb-4" style={{ position: "relative" }}>
-          <span
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
-            }}
-          >
-            <IconSearch size={20} className="text-muted" />
-          </span>
+        <div className="search-box">
+          <IconSearch size={20} className="search-box__icon" />
           <input
             type="search"
-            className="input"
+            className="search-box__input"
             placeholder="Buscar músicas..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: 44 }}
           />
         </div>
 
@@ -112,7 +99,7 @@ export function SongsListPage() {
             }
           />
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="songs-list">
             {sortedSongs.map((song) => (
               <Link
                 key={song.id}

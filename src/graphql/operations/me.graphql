@@ -1,0 +1,31 @@
+# User preferences query - requires authentication
+query MePreferences {
+  mePreferences {
+    id
+    defaultMapView {
+      showChords
+      showLyrics
+      showNotes
+      fontScale
+    }
+    rev
+    updatedAt
+  }
+}
+
+mutation UpdateMePreferences(
+  $baseRev: Int
+  $patch: UpdateUserPreferencesInput!
+) {
+  updateMePreferences(baseRev: $baseRev, patch: $patch) {
+    id
+    defaultMapView {
+      showChords
+      showLyrics
+      showNotes
+      fontScale
+    }
+    rev
+    updatedAt
+  }
+}

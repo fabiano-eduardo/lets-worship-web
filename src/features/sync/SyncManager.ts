@@ -13,6 +13,7 @@ import {
   type SyncPushResponse,
   type SyncPullResponse,
   type SyncPullChange,
+  type SyncEntitiesSnapshot,
 } from "./graphql";
 import type { Song, SongVersion, SectionNoteEntity } from "@/shared/types";
 
@@ -228,11 +229,14 @@ class SyncManager {
         },
       });
 
-      const { changes, nextCursor, hasMore } = response.syncPull;
+      const { changes, entities, nextCursor, hasMore } = response.syncPull;
+
+      // Build entity lookup maps from snapshot
+      const entityMaps = this.buildEntityMaps(entities);
 
       // Apply changes
       for (const change of changes) {
-        await this.applyRemoteChange(change);
+        await this.applyRemoteChange(change, entityMaps);
         totalPulled++;
       }
 
@@ -248,9 +252,59 @@ class SyncManager {
     return totalPulled;
   }
 
+  // Build lookup maps from entities snapshot
+  private buildEntityMaps(entities?: SyncEntitiesSnapshot): {
+    songs: Map<string, Record<string, unknown>>;
+    versions: Map<string, Record<string, unknown>>;
+    notes: Map<string, Record<string, unknown>>;
+  } {
+    const songs = new Map<string, Record<string, unknown>>();
+    const versions = new Map<string, Record<string, unknown>>();
+    const notes = new Map<string, Record<string, unknown>>();
+
+    if (entities?.songs) {
+      for (const song of entities.songs) {
+        songs.set(song.id, song as unknown as Record<string, unknown>);
+      }
+    }
+    if (entities?.versions) {
+      for (const version of entities.versions) {
+        versions.set(version.id, version as unknown as Record<string, unknown>);
+      }
+    }
+    if (entities?.notes) {
+      for (const note of entities.notes) {
+        notes.set(note.id, note as unknown as Record<string, unknown>);
+      }
+    }
+
+    return { songs, versions, notes };
+  }
+
   // Apply a remote change to local DB
-  private async applyRemoteChange(change: SyncPullChange): Promise<void> {
+  private async applyRemoteChange(
+    change: SyncPullChange,
+    entityMaps: {
+      songs: Map<string, Record<string, unknown>>;
+      versions: Map<string, Record<string, unknown>>;
+      notes: Map<string, Record<string, unknown>>;
+    },
+  ): Promise<void> {
     const entityType = fromGraphQLEntityType(change.entityType);
+
+    // Get entity data from the appropriate map
+    let entityData: Record<string, unknown> | undefined;
+    switch (change.entityType) {
+      case "SONG":
+        entityData = entityMaps.songs.get(change.entityId);
+        break;
+      case "SONG_VERSION":
+        entityData = entityMaps.versions.get(change.entityId);
+        break;
+      case "SECTION_NOTE":
+        entityData = entityMaps.notes.get(change.entityId);
+        break;
+    }
 
     // Check if local entity is dirty (conflict detection)
     const localEntity = await this.getLocalEntity(entityType, change.entityId);
@@ -260,7 +314,7 @@ class SyncManager {
         entityType,
         change.entityId,
         JSON.parse(JSON.stringify(localEntity)) as Record<string, unknown>,
-        change.entity || { deleted: true },
+        entityData || { deleted: true },
       );
       this.emit({
         type: "conflict",
@@ -271,11 +325,11 @@ class SyncManager {
 
     if (change.op === "DELETE") {
       await this.deleteLocalEntity(entityType, change.entityId);
-    } else if (change.op === "UPSERT" && change.entity) {
+    } else if (change.op === "UPSERT" && entityData) {
       await this.upsertLocalEntity(
         entityType,
         change.entityId,
-        change.entity,
+        entityData,
         change.rev,
       );
     }

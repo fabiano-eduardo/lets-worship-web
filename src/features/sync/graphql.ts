@@ -22,10 +22,86 @@ export const SYNC_PULL_QUERY = `
         entityId
         op
         rev
-        entity
+        cursorId
+        changedAt
+      }
+      entities {
+        songs {
+          id
+          title
+          artist
+          defaultVersionId
+          createdAt
+          updatedAt
+          rev
+        }
+        versions {
+          id
+          songId
+          label
+          arrangement {
+            sections {
+              id
+              name
+              chordProText
+              notes {
+                id
+                sectionId
+                text
+                anchor {
+                  type
+                  lineIndex
+                  wordOffset
+                  fromLineIndex
+                  toLineIndex
+                }
+              }
+            }
+            sequence {
+              sectionId
+              repeat
+              sequenceNotes
+            }
+          }
+          reference {
+            youtubeUrl
+            spotifyUrl
+            descriptionIfNoLink
+          }
+          musicalMeta {
+            originalKey {
+              root
+              mode
+              type
+              tonalQuality
+            }
+            bpm
+            timeSignature
+          }
+          createdAt
+          updatedAt
+          rev
+        }
+        notes {
+          id
+          versionId
+          sectionId
+          anchor {
+            type
+            lineIndex
+            wordOffset
+            fromLineIndex
+            toLineIndex
+          }
+          text
+          createdAt
+          updatedAt
+          rev
+        }
       }
       nextCursor
       hasMore
+      serverTime
     }
   }
 `;
@@ -60,14 +136,93 @@ export interface SyncPullChange {
   entityId: string;
   op: "UPSERT" | "DELETE";
   rev: number;
-  entity?: Record<string, unknown>;
+  cursorId: string;
+  changedAt: string;
+}
+
+// Entity snapshots returned when includeEntities=true
+export interface SyncEntitiesSnapshot {
+  songs?: Array<{
+    id: string;
+    title: string;
+    artist?: string;
+    defaultVersionId?: string;
+    createdAt: string;
+    updatedAt: string;
+    rev: number;
+  }>;
+  versions?: Array<{
+    id: string;
+    songId: string;
+    label: string;
+    arrangement?: {
+      sections: Array<{
+        id: string;
+        name: string;
+        chordProText: string;
+        notes: Array<{
+          id: string;
+          sectionId: string;
+          text: string;
+          anchor: {
+            type: "LINE" | "WORD" | "RANGE";
+            lineIndex?: number;
+            wordOffset?: number;
+            fromLineIndex?: number;
+            toLineIndex?: number;
+          };
+        }>;
+      }>;
+      sequence: Array<{
+        sectionId: string;
+        repeat: number;
+        sequenceNotes?: string;
+      }>;
+    };
+    reference?: {
+      youtubeUrl?: string;
+      spotifyUrl?: string;
+      descriptionIfNoLink?: string;
+    };
+    musicalMeta?: {
+      originalKey?: {
+        root: string;
+        mode?: string;
+        type?: string;
+        tonalQuality?: string;
+      };
+      bpm?: number;
+      timeSignature?: string;
+    };
+    createdAt: string;
+    updatedAt: string;
+    rev: number;
+  }>;
+  notes?: Array<{
+    id: string;
+    versionId: string;
+    sectionId: string;
+    anchor: {
+      type: "LINE" | "WORD" | "RANGE";
+      lineIndex?: number;
+      wordOffset?: number;
+      fromLineIndex?: number;
+      toLineIndex?: number;
+    };
+    text: string;
+    createdAt: string;
+    updatedAt: string;
+    rev: number;
+  }>;
 }
 
 export interface SyncPullResponse {
   syncPull: {
     changes: SyncPullChange[];
+    entities?: SyncEntitiesSnapshot;
     nextCursor: string | null;
     hasMore: boolean;
+    serverTime: string;
   };
 }
 

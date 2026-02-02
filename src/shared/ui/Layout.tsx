@@ -1,8 +1,13 @@
-// Layout component
+// Layout component - App Shell with CSS Grid (no fixed positioning)
 
 import { Link, useRouter, useLocation } from "@tanstack/react-router";
-import { type ReactNode } from "react";
-import { IconMusic, IconSettings, IconChevronLeft } from "./components/Icons";
+import { type ReactNode, useState, useEffect } from "react";
+import {
+  IconMusic,
+  IconSettings,
+  IconChevronLeft,
+  IconWifiOff,
+} from "./components/Icons";
 import { useOnlineStatus } from "@/shared/hooks/useOnlineStatus";
 import { usePWAUpdate } from "@/shared/hooks/usePWAUpdate";
 import { UserMenu } from "./UserMenu";
@@ -16,71 +21,102 @@ export function Layout({ children }: LayoutProps) {
   const { needsUpdate, updateApp } = usePWAUpdate();
   const location = useLocation();
 
+  // Debug mode: enable via ?debug=1 in URL or localStorage
+  const [debugMode, setDebugMode] = useState(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const debugParam = urlParams.get("debug") === "1";
+    const debugStorage = localStorage.getItem("layout-debug") === "1";
+    setDebugMode(debugParam || debugStorage);
+
+    // Persist debug mode if set via URL
+    if (debugParam) {
+      localStorage.setItem("layout-debug", "1");
+    }
+  }, []);
+
   // Don't show navigation on login page
   const isLoginPage = location.pathname === "/login";
 
-  return (
-    <div className="layout">
-      {/* Top header with user menu (not on login) */}
-      {!isLoginPage && (
-        <header className="fixed top-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800">
-          <div className="flex items-center justify-between px-4 py-2">
-            <div className="flex items-center gap-2">
-              <IconMusic className="w-6 h-6 text-indigo-500" />
-              <span className="font-semibold text-white">Let's Worship</span>
-            </div>
-            <UserMenu />
-          </div>
-        </header>
-      )}
+  // Login page has its own full-screen layout
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
-      {!isOnline && !isLoginPage && (
-        <div
-          className="offline-indicator"
-          style={{ top: isLoginPage ? 0 : 48 }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+  const shellClassName = debugMode ? "app-shell app-shell--debug" : "app-shell";
+
+  return (
+    <div className={shellClassName}>
+      {/* Debug badge */}
+      {debugMode && (
+        <div className="debug-badge">
+          DEBUG | H:56px | N:64px |
+          <button
+            onClick={() => {
+              localStorage.removeItem("layout-debug");
+              setDebugMode(false);
+            }}
+            style={{
+              marginLeft: 8,
+              color: "#f00",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 10,
+            }}
           >
-            <path d="M2 2l20 20M8.5 16.429a5 5 0 0 1 7 0" />
-            <path d="M12 20h.01" />
-          </svg>
-          Você está offline
+            [X]
+          </button>
         </div>
       )}
 
-      <main className={`main ${!isLoginPage ? "pt-14" : ""}`}>{children}</main>
+      {/* Header - grid row 1 */}
+      <header className="app-header">
+        <div className="app-header__brand">
+          <IconMusic className="app-header__logo" />
+          <span className="app-header__title">Let's Worship</span>
+        </div>
+        <UserMenu />
+      </header>
 
-      {!isLoginPage && (
-        <nav className="bottom-nav">
-          <Link
-            to="/songs"
-            className="bottom-nav__item"
-            activeProps={{
-              className: "bottom-nav__item bottom-nav__item--active",
-            }}
-          >
-            <IconMusic size={24} />
-            <span>Músicas</span>
-          </Link>
-          <Link
-            to="/settings"
-            className="bottom-nav__item"
-            activeProps={{
-              className: "bottom-nav__item bottom-nav__item--active",
-            }}
-          >
-            <IconSettings size={24} />
-            <span>Config</span>
-          </Link>
-        </nav>
-      )}
+      {/* Main scrollable content - grid row 2 */}
+      <main className="app-main">
+        {/* Offline indicator (inside main, at top) */}
+        {!isOnline && (
+          <div className="offline-banner">
+            <IconWifiOff size={16} />
+            <span>Você está offline</span>
+          </div>
+        )}
+        {children}
+      </main>
 
+      {/* Bottom navigation - grid row 3 */}
+      <nav className="app-nav">
+        <Link
+          to="/songs"
+          className="app-nav__item"
+          activeProps={{
+            className: "app-nav__item app-nav__item--active",
+          }}
+        >
+          <IconMusic size={24} />
+          <span>Músicas</span>
+        </Link>
+        <Link
+          to="/settings"
+          className="app-nav__item"
+          activeProps={{
+            className: "app-nav__item app-nav__item--active",
+          }}
+        >
+          <IconSettings size={24} />
+          <span>Config</span>
+        </Link>
+      </nav>
+
+      {/* PWA update banner */}
       {needsUpdate && (
         <div className="pwa-update-banner">
           <div className="pwa-update-banner__content">
@@ -137,7 +173,14 @@ export function PageHeader({
           <IconChevronLeft size={24} />
         </button>
       )}
-      <h1 className="header__title">{title}</h1>
+      <h1
+        className="header__title"
+        style={{
+          marginLeft: showBack ? undefined : "16px",
+        }}
+      >
+        {title}
+      </h1>
       {actions && <div className="header__actions">{actions}</div>}
     </header>
   );

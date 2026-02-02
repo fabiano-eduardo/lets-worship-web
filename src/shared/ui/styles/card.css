@@ -111,3 +111,10 @@
 .list-card__arrow {
   color: var(--color-text-muted);
 }
+
+/* Songs list container */
+.songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

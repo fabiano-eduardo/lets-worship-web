@@ -1,0 +1,8 @@
+# Health check query - should work without authentication
+query Health {
+  health {
+    status
+    version
+    serverTime
+  }
+}

@@ -4,8 +4,8 @@ import { useParams, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { conflictRepository } from "../conflictRepository";
 import { db } from "@/db";
+import { PageHeader } from "@/shared/ui/Layout";
 import {
-  PageHeader,
   Button,
   useToast,
   IconCheck,
@@ -15,7 +15,7 @@ import {
 import type { SyncConflict } from "@/shared/types";
 
 export function ConflictResolutionPage() {
-  const { conflictId } = useParams({ from: "/settings/conflicts/$conflictId" });
+  const { conflictId } = useParams({ strict: false }) as { conflictId: string };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();

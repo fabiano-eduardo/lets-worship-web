@@ -84,13 +84,107 @@ O app funciona sem Firebase configurado, mas:
 
 ## 📦 Scripts
 
-| Comando           | Descrição                    |
-| ----------------- | ---------------------------- |
-| `npm run dev`     | Servidor de desenvolvimento  |
-| `npm run build`   | Build de produção            |
-| `npm run preview` | Preview do build             |
-| `npm run lint`    | Executa ESLint               |
-| `npm run check`   | Build + verificação de tipos |
+| Comando                    | Descrição                        |
+| -------------------------- | -------------------------------- |
+| `npm run dev`              | Servidor de desenvolvimento      |
+| `npm run build`            | Build de produção                |
+| `npm run preview`          | Preview do build                 |
+| `npm run lint`             | Executa ESLint                   |
+| `npm run check`            | Build + verificação de tipos     |
+| `npm run graphql:codegen`  | Gera tipos TypeScript do GraphQL |
+| `npm run graphql:schema`   | Baixa o schema do backend        |
+| `npm run diagnose:backend` | Executa diagnóstico de conexão   |
+
+## 🔌 GraphQL
+
+O app usa GraphQL para comunicação com o backend de sincronização.
+
+### Configuração
+
+Configure a URL do backend no `.env`:
+
+```env
+VITE_GRAPHQL_URL=http://localhost:3000/graphql
+```
+
+### Gerando Tipos
+
+Os tipos TypeScript são gerados automaticamente a partir do schema do backend:
+
+```bash
+npm run graphql:codegen
+```
+
+Isso gera `src/graphql/generated/graphql.ts` com:
+
+- Tipos para todas as queries e mutations
+- TypedDocumentNode para type-safety total
+- Fragmentos reutilizáveis
+
+### Obtendo Token de Autenticação para Codegen
+
+Se o backend exige autenticação para introspecção:
+
+1. Abra o app no browser e faça login
+2. Abra o console (F12)
+3. Execute:
+   ```javascript
+   await (await import("firebase/auth")).getAuth().currentUser.getIdToken();
+   ```
+4. Copie o token e configure:
+   ```bash
+   export CODEGEN_AUTH_TOKEN="seu-token-aqui"
+   npm run graphql:codegen
+   ```
+
+### Diagnóstico de Conexão
+
+Para verificar se o backend está funcionando:
+
+```bash
+npm run diagnose:backend
+```
+
+Isso verifica:
+
+- ✅ Conectividade de rede
+- ✅ CORS configurado corretamente
+- ✅ Health check (se disponível)
+- ✅ Introspecção do schema
+- ✅ Autenticação (se token fornecido)
+- ✅ Queries autenticadas (songs, syncPull)
+
+**Exemplo de saída:**
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║       Let's Worship - Backend Diagnostic Report               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📍 GraphQL URL: http://localhost:3000/graphql
+🔐 Auth Token:  Provided
+⏰ Timestamp:   2026-02-01T05:00:00.000Z
+
+✅ Network Connectivity [50ms]
+✅ CORS Headers Check [5ms]
+✅ Schema Introspection (without auth) [10ms]
+✅ Songs Query (authenticated) [25ms]
+
+═════════════════════════════════════════════════════════════════
+SUMMARY: 4 passed, 0 failed
+═════════════════════════════════════════════════════════════════
+```
+
+### Mapa de Problemas Comuns
+
+| Erro                   | Causa Provável                         | Correção                                                    |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------- |
+| `ECONNREFUSED`         | Backend não está rodando               | Inicie o backend                                            |
+| HTTP 404               | URL do GraphQL incorreta               | Verifique `VITE_GRAPHQL_URL`                                |
+| CORS error             | Backend não permite origem do frontend | Adicione `http://localhost:5173` ao CORS_ORIGINS no backend |
+| `UNAUTHENTICATED`      | Token ausente ou expirado              | Faça login e obtenha token novo                             |
+| `Cannot query field X` | Schema divergente                      | Rode `npm run graphql:codegen` para regenerar tipos         |
+| Introspection disabled | Introspecção desabilitada em prod      | Habilite em dev ou baixe schema manualmente                 |
 
 ## 🏗️ Build de Produção
 

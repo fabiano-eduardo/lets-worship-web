@@ -108,8 +108,8 @@ export function LoginPage() {
 
   const handleForgotPassword = () => {
     showToast(
-      "Recurso em breve! Por enquanto, entre em contato com o suporte.",
       "info",
+      "Recurso em breve! Por enquanto, entre em contato com o suporte.",
     );
   };
 

@@ -1,0 +1,104 @@
+# Sync operations for offline-first architecture
+
+query SyncPull($input: SyncPullInput!) {
+  syncPull(input: $input) {
+    changes {
+      entityType
+      entityId
+      op
+      rev
+      cursorId
+      changedAt
+    }
+    entities {
+      songs {
+        id
+        title
+        artist
+        defaultVersionId
+        createdAt
+        updatedAt
+        rev
+      }
+      versions {
+        id
+        songId
+        label
+        arrangement {
+          sections {
+            id
+            name
+            chordProText
+            notes {
+              id
+              sectionId
+              text
+              anchor {
+                type
+                lineIndex
+                wordOffset
+                fromLineIndex
+                toLineIndex
+              }
+            }
+          }
+          sequence {
+            sectionId
+            repeat
+            sequenceNotes
+          }
+        }
+        reference {
+          youtubeUrl
+          spotifyUrl
+          descriptionIfNoLink
+        }
+        musicalMeta {
+          originalKey {
+            root
+            mode
+            type
+            tonalQuality
+          }
+          bpm
+          timeSignature
+        }
+        createdAt
+        updatedAt
+        rev
+      }
+      notes {
+        id
+        versionId
+        sectionId
+        anchor {
+          type
+          lineIndex
+          wordOffset
+          fromLineIndex
+          toLineIndex
+        }
+        text
+        createdAt
+        updatedAt
+        rev
+      }
+    }
+    nextCursor
+    hasMore
+    serverTime
+  }
+}
+
+mutation SyncPush($input: SyncPushInput!) {
+  syncPush(input: $input) {
+    applied {
+      mutationId
+      status
+      entityId
+      newRev
+      reason
+    }
+    serverTime
+  }
+}

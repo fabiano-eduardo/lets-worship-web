@@ -1,0 +1,60 @@
+# Section notes operations
+
+fragment SectionNoteFields on SectionNote {
+  id
+  versionId
+  sectionId
+  anchor {
+    type
+    lineIndex
+    wordOffset
+    fromLineIndex
+    toLineIndex
+  }
+  text
+  createdAt
+  updatedAt
+  rev
+}
+
+query SectionNotes($versionId: ID!) {
+  sectionNotes(versionId: $versionId) {
+    ...SectionNoteFields
+  }
+}
+
+query SectionNotesBySection($versionId: ID!, $sectionId: ID!) {
+  sectionNotesBySection(versionId: $versionId, sectionId: $sectionId) {
+    ...SectionNoteFields
+  }
+}
+
+mutation CreateSectionNote($input: CreateSectionNoteInput!) {
+  createSectionNote(input: $input) {
+    ...SectionNoteFields
+  }
+}
+
+mutation UpdateSectionNote(
+  $id: ID!
+  $baseRev: Int
+  $patch: UpdateSectionNoteInput!
+) {
+  updateSectionNote(id: $id, baseRev: $baseRev, patch: $patch) {
+    id
+    text
+    anchor {
+      type
+      lineIndex
+      wordOffset
+      fromLineIndex
+      toLineIndex
+    }
+    updatedAt
+    rev
+  }
+}
+
+mutation DeleteSectionNote($id: ID!, $baseRev: Int) {
+  deleteSectionNote(id: $id, baseRev: $baseRev)
+}

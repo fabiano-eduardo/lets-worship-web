@@ -24,6 +24,7 @@ import {
   IconAlertTriangle,
   IconCheck,
   IconLoader,
+  IconLogOut,
 } from "@/shared/ui";
 import { useSyncStatus, useSync } from "@/features/sync";
 import { conflictRepository } from "@/features/sync/conflictRepository";
@@ -35,14 +36,16 @@ export function SettingsPage() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, signOut } = useAuth();
   const { status: syncStatus, lastMessage: syncMessage } = useSyncStatus();
   const { sync, canSync } = useSync();
 
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Fetch storage stats
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -141,6 +144,20 @@ export function SettingsPage() {
       showToast("error", "Erro ao limpar dados", String(error));
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  // Sign out handler
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      showToast("success", "Até logo!", "Você foi desconectado.");
+      setIsSignOutModalOpen(false);
+    } catch (error) {
+      showToast("error", "Erro ao sair", String(error));
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
@@ -285,6 +302,45 @@ export function SettingsPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Account */}
+        {isAuthenticated && user && (
+          <div className="section">
+            <h2 className="section__title">Conta</h2>
+            <div className="card p-4">
+              <div className="flex items-center gap-4 mb-4">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || "Avatar"}
+                    className="w-12 h-12 rounded-full"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-surface-hover flex items-center justify-center">
+                    <span className="text-xl font-semibold text-muted">
+                      {user.displayName?.[0] || user.email?.[0] || "?"}
+                    </span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {user.displayName && (
+                    <p className="font-semibold truncate">{user.displayName}</p>
+                  )}
+                  <p className="text-sm text-muted truncate">{user.email}</p>
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => setIsSignOutModalOpen(true)}
+              >
+                <IconLogOut size={20} />
+                Sair da conta
+              </Button>
+            </div>
           </div>
         )}
 
@@ -437,6 +493,18 @@ export function SettingsPage() {
         confirmLabel="Limpar tudo"
         variant="danger"
         isLoading={isClearing}
+      />
+
+      {/* Sign out confirmation */}
+      <ConfirmModal
+        isOpen={isSignOutModalOpen}
+        onClose={() => setIsSignOutModalOpen(false)}
+        onConfirm={handleSignOut}
+        title="Sair da conta"
+        message="Você será desconectado. Suas músicas e versões permanecerão salvas localmente neste dispositivo."
+        confirmLabel="Sair"
+        variant="primary"
+        isLoading={isSigningOut}
       />
     </>
   );
