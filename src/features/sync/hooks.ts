@@ -2,28 +2,76 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { syncManager, type SyncStatus, type SyncEvent } from "./SyncManager";
+import {
+  syncManager,
+  type SyncStatus,
+  type SyncEvent,
+} from "./SyncManager";
 import { useAuth } from "@/app/auth";
 import { useNetworkStatus } from "@/shared/api";
+import { AuthenticationError } from "@/shared/api";
+import { outboxRepository } from "./outboxRepository";
+import { getSyncState } from "@/db";
 
 // Hook to get sync status
 export function useSyncStatus() {
   const [status, setStatus] = useState<SyncStatus>(syncManager.getStatus());
   const [lastMessage, setLastMessage] = useState<string>();
   const [progress, setProgress] = useState({ pushed: 0, pulled: 0 });
+  const { isOnline } = useNetworkStatus();
+  const [pendingMutationsCount, setPendingMutationsCount] = useState(0);
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+  const [hasAuthError, setHasAuthError] = useState(false);
+
+  const refreshSyncState = useCallback(async () => {
+    try {
+      const [counts, syncState] = await Promise.all([
+        outboxRepository.countByStatus(),
+        getSyncState(),
+      ]);
+      setPendingMutationsCount(counts.PENDING ?? 0);
+      setLastSyncAt(syncState?.lastSyncAt ? new Date(syncState.lastSyncAt) : null);
+    } catch (error) {
+      console.error("[useSyncStatus] Failed to refresh sync state:", error);
+    }
+  }, []);
 
   useEffect(() => {
     return syncManager.subscribe((event: SyncEvent) => {
       if (event.type === "status") {
         setStatus(event.status!);
         setLastMessage(event.message);
+        if (event.status !== "error") {
+          setHasAuthError(false);
+        }
+        if (event.status === "success") {
+          refreshSyncState();
+        }
       } else if (event.type === "progress") {
         setProgress(event.progress!);
+      } else if (event.type === "error") {
+        setHasAuthError(event.error instanceof AuthenticationError);
+        refreshSyncState();
       }
     });
-  }, []);
+  }, [refreshSyncState]);
 
-  return { status, lastMessage, progress };
+  useEffect(() => {
+    refreshSyncState();
+    const interval = window.setInterval(refreshSyncState, 15000);
+    return () => window.clearInterval(interval);
+  }, [refreshSyncState]);
+
+  return {
+    status,
+    lastMessage,
+    progress,
+    isOnline,
+    pendingMutationsCount,
+    lastSyncAt,
+    hasAuthError,
+    syncError: status === "error" ? lastMessage : undefined,
+  };
 }
 
 // Hook to trigger sync with invalidation

@@ -1,175 +1,455 @@
 // User menu component for header
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/app/auth";
-import { useNetworkStatus } from "@/shared/api";
 import { useSyncStatus, useSync } from "@/features/sync";
 import {
-  IconUser,
   IconLogOut,
   IconWifi,
   IconWifiOff,
   IconRefresh,
   IconLoader,
   IconCheck,
+  IconChevronDown,
+  IconAlertTriangle,
 } from "./components/Icons";
+
+const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
+
+type BadgeStatus = "offline" | "ok" | "pending" | "error";
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQueryList = window.matchMedia(query);
+    const updateMatches = () => setMatches(mediaQueryList.matches);
+
+    updateMatches();
+    mediaQueryList.addEventListener("change", updateMatches);
+
+    return () => mediaQueryList.removeEventListener("change", updateMatches);
+  }, [query]);
+
+  return matches;
+}
+
+function getUserDisplayName(
+  displayName?: string | null,
+  email?: string | null,
+) {
+  if (displayName) return displayName;
+  if (email) return email.split("@")[0];
+  return "Conta";
+}
+
+function getUserInitials(
+  displayName?: string | null,
+  email?: string | null,
+  uid?: string | null,
+) {
+  const source = displayName || email || uid || "U";
+  const parts = source
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  const initials = parts.map((part) => part[0]?.toUpperCase()).join("");
+  return initials || "U";
+}
+
+function getBadgeStatus(params: {
+  isOnline: boolean;
+  pendingMutationsCount: number;
+  hasAuthError: boolean;
+  syncStatus: string;
+}): BadgeStatus {
+  const { isOnline, pendingMutationsCount, hasAuthError, syncStatus } = params;
+
+  if (!isOnline) return "offline";
+  if (hasAuthError || syncStatus === "error") return "error";
+  if (pendingMutationsCount > 0) return "pending";
+  return "ok";
+}
+
+function formatRelativeTime(date: Date | null) {
+  if (!date) return "Nunca";
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 10000) return "agora mesmo";
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "há menos de 1 min";
+  if (minutes < 60) return `há ${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "há 1 dia";
+  if (days < 7) return `há ${days} dias`;
+
+  return date.toLocaleDateString();
+}
+
+interface UserMenuButtonProps {
+  avatarUrl?: string | null;
+  initials: string;
+  displayName: string;
+  badgeStatus: BadgeStatus;
+  isOpen: boolean;
+  showLabel: boolean;
+  onToggle: () => void;
+  buttonRef: React.RefObject<HTMLButtonElement>;
+}
+
+export function UserMenuButton({
+  avatarUrl,
+  initials,
+  displayName,
+  badgeStatus,
+  isOpen,
+  showLabel,
+  onToggle,
+  buttonRef,
+}: UserMenuButtonProps) {
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className="user-menu__button"
+      onClick={onToggle}
+      aria-haspopup="dialog"
+      aria-expanded={isOpen}
+      aria-label="Abrir menu do usuário"
+    >
+      <span className="user-menu__avatar" aria-hidden>
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="user-menu__avatar-image" />
+        ) : (
+          <span className="user-menu__avatar-fallback">{initials}</span>
+        )}
+        <span
+          className="user-menu__status"
+          data-status={badgeStatus}
+          aria-hidden
+        />
+      </span>
+      {showLabel && (
+        <span className="user-menu__label" aria-hidden>
+          {displayName}
+        </span>
+      )}
+      {showLabel && (
+        <IconChevronDown className="user-menu__chevron" size={16} />
+      )}
+    </button>
+  );
+}
+
+interface UserMenuPanelProps {
+  isDesktop: boolean;
+  panelRef: React.RefObject<HTMLDivElement>;
+  onClose: () => void;
+  displayName: string;
+  emailOrUid: string;
+  avatarUrl?: string | null;
+  initials: string;
+  badgeStatus: BadgeStatus;
+  isOnline: boolean;
+  pendingMutationsCount: number;
+  lastSyncAt: Date | null;
+  hasAuthError: boolean;
+  syncError?: string;
+  syncStatus: string;
+  canSync: boolean;
+  isSyncing: boolean;
+  onSyncNow: () => void;
+  onLogout: () => void;
+}
+
+export function UserMenuPanel({
+  isDesktop,
+  panelRef,
+  onClose,
+  displayName,
+  emailOrUid,
+  avatarUrl,
+  initials,
+  badgeStatus,
+  isOnline,
+  pendingMutationsCount,
+  lastSyncAt,
+  hasAuthError,
+  syncError,
+  syncStatus,
+  canSync,
+  isSyncing,
+  onSyncNow,
+  onLogout,
+}: UserMenuPanelProps) {
+  const syncLabel = useMemo(() => {
+    if (hasAuthError) return "Autenticação necessária";
+    if (syncStatus === "error") return "Erro de sincronização";
+    if (pendingMutationsCount > 0)
+      return `Pendente: ${pendingMutationsCount} mudanças`;
+    return "Sincronizado";
+  }, [hasAuthError, pendingMutationsCount, syncStatus]);
+
+  const statusLabel = isOnline ? "Online" : "Offline";
+  const lastSyncLabel = formatRelativeTime(lastSyncAt);
+
+  const panelContent = (
+    <div
+      className={`user-menu__panel ${isDesktop ? "user-menu__panel--popover" : "user-menu__panel--sheet"}`}
+      ref={panelRef}
+      role="dialog"
+      aria-label="Menu do usuário"
+      tabIndex={-1}
+    >
+      <div className="user-menu__section user-menu__section--account">
+        <div className="user-menu__account-row">
+          <span className="user-menu__avatar user-menu__avatar--lg" aria-hidden>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="user-menu__avatar-image" />
+            ) : (
+              <span className="user-menu__avatar-fallback">{initials}</span>
+            )}
+            <span
+              className="user-menu__status"
+              data-status={badgeStatus}
+              aria-hidden
+            />
+          </span>
+          <div className="user-menu__account-text">
+            <span className="user-menu__account-name user-menu__truncate">
+              {displayName}
+            </span>
+            <span className="user-menu__account-subtext user-menu__truncate">
+              {emailOrUid}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="user-menu__divider" />
+
+      <div className="user-menu__section">
+        <div className="user-menu__section-title">Conectividade e Sync</div>
+        <div className="user-menu__sync-card">
+          <div className="user-menu__sync-row">
+            <span
+              className="user-menu__sync-dot"
+              data-status={isOnline ? "ok" : "offline"}
+              aria-hidden
+            />
+            <span className="user-menu__sync-label">{statusLabel}</span>
+          </div>
+          <div className="user-menu__sync-row">
+            {hasAuthError || syncStatus === "error" ? (
+              <IconAlertTriangle className="user-menu__sync-icon user-menu__sync-icon--error" size={16} />
+            ) : syncStatus === "syncing" || isSyncing ? (
+              <IconLoader
+                className="user-menu__sync-icon user-menu__sync-icon--info user-menu__sync-icon--spin"
+                size={16}
+              />
+            ) : pendingMutationsCount > 0 ? (
+              <IconRefresh className="user-menu__sync-icon user-menu__sync-icon--warning" size={16} />
+            ) : (
+              <IconCheck className="user-menu__sync-icon user-menu__sync-icon--success" size={16} />
+            )}
+            <span className="user-menu__sync-label">{syncLabel}</span>
+          </div>
+          <div className="user-menu__sync-meta">
+            Última sincronização: {lastSyncLabel}
+          </div>
+          {syncError && (
+            <div className="user-menu__sync-error user-menu__truncate">
+              {syncError}
+            </div>
+          )}
+          {!isOnline && (
+            <div className="user-menu__sync-hint">Usando dados locais</div>
+          )}
+          <div className="user-menu__sync-actions">
+            <button
+              type="button"
+              className="button button--secondary button--sm"
+              onClick={onSyncNow}
+              disabled={!canSync}
+            >
+              {isSyncing ? "Sincronizando..." : "Sincronizar agora"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="user-menu__divider" />
+
+      <div className="user-menu__section user-menu__section--actions">
+        <button
+          type="button"
+          className="user-menu__action user-menu__action--destructive"
+          onClick={onLogout}
+        >
+          <IconLogOut className="user-menu__action-icon" size={16} />
+          <span>Sair</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isDesktop) {
+    return panelContent;
+  }
+
+  return (
+    <div className="user-menu__overlay" onClick={onClose} role="presentation">
+      <div
+        className="user-menu__sheet"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="user-menu__sheet-handle" aria-hidden />
+        {panelContent}
+      </div>
+    </div>
+  );
+}
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
-  const { isOnline } = useNetworkStatus();
-  const { status: syncStatus, lastMessage } = useSyncStatus();
-  const { sync, canSync } = useSync();
+  const {
+    status: syncStatus,
+    isOnline,
+    pendingMutationsCount,
+    lastSyncAt,
+    hasAuthError,
+    syncError,
+  } = useSyncStatus();
+  const { sync, canSync, isSyncing } = useSync();
+  const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+  const displayName = getUserDisplayName(user?.displayName, user?.email);
+  const emailOrUid = user?.email || user?.uid || "";
+  const initials = getUserInitials(user?.displayName, user?.email, user?.uid);
+
+  const badgeStatus = getBadgeStatus({
+    isOnline,
+    pendingMutationsCount,
+    hasAuthError,
+    syncStatus,
+  });
+
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+    if (lastFocusedRef.current) {
+      lastFocusedRef.current.focus();
+    } else {
+      buttonRef.current?.focus();
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSignOut = async () => {
+  const toggleMenu = () => {
+    setIsOpen((prev) => !prev);
+  };
+
+  const handleSignOut = useCallback(async () => {
+    const confirmed = window.confirm("Deseja sair da sua conta?");
+    if (!confirmed) return;
+
     try {
       await signOut();
-      // Use window.location to avoid router type issues
       window.location.href = "/login";
     } catch (error) {
       console.error("Error signing out:", error);
     }
-  };
+  }, [signOut]);
 
-  const getSyncStatusColor = () => {
-    if (!isOnline) return "bg-red-500";
-    switch (syncStatus) {
-      case "syncing":
-        return "bg-indigo-500";
-      case "success":
-        return "bg-green-500";
-      case "error":
-        return "bg-red-500";
-      default:
-        return "bg-yellow-500";
+  useEffect(() => {
+    if (!isOpen) return;
+
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+      }
     }
-  };
+
+    function handleClickOutside(event: MouseEvent) {
+      if (!isDesktop) return;
+      const target = event.target as Node;
+      if (
+        panelRef.current &&
+        !panelRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        closeMenu();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, isDesktop, closeMenu]);
 
   if (!user) {
     return null;
   }
 
   return (
-    <div className="relative" ref={menuRef}>
-      {/* User button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors"
-      >
-        {/* Sync status indicator */}
-        <span
-          className={`w-2 h-2 rounded-full ${getSyncStatusColor()} ${
-            syncStatus === "syncing" ? "animate-pulse" : ""
-          }`}
-          title={
-            !isOnline
-              ? "Offline"
-              : syncStatus === "syncing"
-                ? "Sincronizando..."
-                : syncStatus === "success"
-                  ? "Sincronizado"
-                  : syncStatus === "error"
-                    ? lastMessage || "Erro de sincronização"
-                    : "Aguardando"
-          }
-        />
+    <div className="user-menu">
+      <UserMenuButton
+        avatarUrl={user.photoURL}
+        initials={initials}
+        displayName={displayName}
+        badgeStatus={badgeStatus}
+        isOpen={isOpen}
+        showLabel={isDesktop}
+        onToggle={toggleMenu}
+        buttonRef={buttonRef}
+      />
 
-        {/* User avatar or icon */}
-        {user.photoURL ? (
-          <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
-        ) : (
-          <IconUser className="w-5 h-5 text-slate-300" />
-        )}
-
-        {/* Email (truncated) */}
-        <span className="text-sm text-slate-300 max-w-[120px] truncate hidden sm:block">
-          {user.displayName || user.email?.split("@")[0]}
-        </span>
-      </button>
-
-      {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden z-50">
-          {/* User info */}
-          <div className="p-3 border-b border-slate-700">
-            <p className="text-sm font-medium text-white truncate">
-              {user.displayName || "Usuário"}
-            </p>
-            <p className="text-xs text-slate-400 truncate">{user.email}</p>
-          </div>
-
-          {/* Sync status */}
-          <div className="p-3 border-b border-slate-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                {!isOnline ? (
-                  <>
-                    <IconWifiOff className="w-4 h-4 text-red-500" />
-                    <span className="text-slate-300">Offline</span>
-                  </>
-                ) : syncStatus === "syncing" ? (
-                  <>
-                    <IconLoader className="w-4 h-4 text-indigo-400 animate-spin" />
-                    <span className="text-slate-300">Sincronizando...</span>
-                  </>
-                ) : syncStatus === "success" ? (
-                  <>
-                    <IconCheck className="w-4 h-4 text-green-500" />
-                    <span className="text-slate-300">Sincronizado</span>
-                  </>
-                ) : syncStatus === "error" ? (
-                  <>
-                    <IconWifi className="w-4 h-4 text-red-500" />
-                    <span className="text-slate-300">Erro</span>
-                  </>
-                ) : (
-                  <>
-                    <IconWifi className="w-4 h-4 text-green-500" />
-                    <span className="text-slate-300">Online</span>
-                  </>
-                )}
-              </div>
-              {canSync && syncStatus !== "syncing" && (
-                <button
-                  onClick={() => sync()}
-                  className="p-1.5 rounded hover:bg-slate-600 transition-colors"
-                  title="Sincronizar agora"
-                >
-                  <IconRefresh className="w-4 h-4 text-slate-400" />
-                </button>
-              )}
-            </div>
-            {!isOnline && (
-              <p className="text-xs text-slate-500 mt-1">Usando dados locais</p>
-            )}
-            {syncStatus === "error" && lastMessage && (
-              <p className="text-xs text-red-400 mt-1">{lastMessage}</p>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="p-1">
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-slate-700 rounded transition-colors"
-            >
-              <IconLogOut className="w-4 h-4" />
-              <span>Sair</span>
-            </button>
-          </div>
-        </div>
+        <UserMenuPanel
+          isDesktop={isDesktop}
+          panelRef={panelRef}
+          onClose={closeMenu}
+          displayName={displayName}
+          emailOrUid={emailOrUid}
+          avatarUrl={user.photoURL}
+          initials={initials}
+          badgeStatus={badgeStatus}
+          isOnline={isOnline}
+          pendingMutationsCount={pendingMutationsCount}
+          lastSyncAt={lastSyncAt}
+          hasAuthError={hasAuthError}
+          syncError={syncError}
+          syncStatus={syncStatus}
+          canSync={canSync}
+          isSyncing={isSyncing}
+          onSyncNow={sync}
+          onLogout={handleSignOut}
+        />
       )}
     </div>
   );
@@ -177,8 +457,7 @@ export function UserMenu() {
 
 // Simple status badge for compact display
 export function ConnectionStatus() {
-  const { isOnline } = useNetworkStatus();
-  const { status: syncStatus } = useSyncStatus();
+  const { status: syncStatus, isOnline } = useSyncStatus();
 
   const getColor = () => {
     if (!isOnline) return "bg-red-500/20 text-red-400";
