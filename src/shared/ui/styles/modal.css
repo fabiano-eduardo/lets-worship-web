@@ -21,7 +21,7 @@
 .modal {
   width: 100%;
   max-width: 480px;
-  max-height: calc(100vh - var(--space-8));
+  max-height: calc(100dvh - var(--space-8));
   background-color: var(--color-bg-secondary);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   overflow: hidden;

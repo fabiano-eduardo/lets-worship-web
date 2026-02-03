@@ -119,7 +119,13 @@ export function SectionDisplay({
           </div>
         )}
       </div>
-      <div className="section-display__content">
+      <div
+        className={
+          (!showLyrics && !showChords) || (!chordProText && !showChords)
+            ? "display__content__no__content"
+            : "section-display__content"
+        }
+      >
         <ChordDisplay
           chordProText={chordProText}
           originalKey={originalKey}

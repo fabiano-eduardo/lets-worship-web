@@ -80,6 +80,12 @@
 }
 
 .section-display__content {
+  padding-top: 6px;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+}
+
+.section-display__content__no__content {
   padding-left: var(--space-4);
   border-left: 2px solid var(--color-border);
 }
@@ -120,7 +126,7 @@
 .performance-mode {
   background-color: #000;
   padding: var(--space-6) var(--space-4);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .performance-mode .chord-display {

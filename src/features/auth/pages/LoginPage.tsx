@@ -35,7 +35,16 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const redirectTo = search.redirect || "/songs";
+  const redirectTo = (search.redirect as string) || "/songs";
+
+  // Redirect if already authenticated (safety check if beforeLoad didn't catch it)
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: redirectTo, replace: true });
+    }
+  }, [isAuthenticated, navigate, redirectTo]);
 
   // Clear error when switching modes
   useEffect(() => {
@@ -70,14 +79,14 @@ export function LoginPage() {
       } else {
         await signUpWithEmailPassword(email, password);
       }
-      navigate({ to: redirectTo });
+      // Success - context will update via AuthProvider
+      // The useEffect above will handle redirection once isAuthenticated is true
     } catch (err) {
       if (err instanceof FirebaseError) {
         setError(getAuthErrorMessage(err.code));
       } else {
         setError("Erro ao autenticar. Tente novamente.");
       }
-    } finally {
       setIsLoading(false);
     }
   };
@@ -94,8 +103,8 @@ export function LoginPage() {
 
     try {
       await signInWithGoogle();
-      // On mobile, this will redirect, so navigation happens after redirect
-      navigate({ to: redirectTo });
+      // On desktop (popup), context will update and useEffect will redirect.
+      // On mobile (redirect), the whole page will reload later.
     } catch (err) {
       if (err instanceof FirebaseError) {
         setError(getAuthErrorMessage(err.code));

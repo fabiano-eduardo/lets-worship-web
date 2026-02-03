@@ -2,12 +2,12 @@
 
 /* Container */
 .login-page {
-  min-height: 100vh;
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
+  padding: var(--space-8) var(--space-4);
   background: linear-gradient(
     135deg,
     var(--color-bg-primary) 0%,
@@ -15,7 +15,7 @@
     var(--color-bg-primary) 100%
   );
   position: relative;
-  overflow: hidden;
+  /* Scroll is handled by body to enable native pull-to-refresh */
 }
 
 /* Subtle background pattern */

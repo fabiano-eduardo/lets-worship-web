@@ -13,18 +13,13 @@
 
 /* App Shell Container - CSS Grid */
 .app-shell {
-  display: grid;
-  grid-template-rows:
-    calc(var(--app-header-h) + var(--safe-area-inset-top))
-    1fr
-    calc(var(--app-nav-h) + var(--safe-area-inset-bottom));
-  height: 100%;
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
 }
 
 /* Header - lives in grid row 1 */
 .app-header {
-  grid-row: 1;
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
@@ -32,6 +27,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--safe-area-inset-top) var(--space-4) 0;
+  height: calc(var(--app-header-h) + var(--safe-area-inset-top));
   background-color: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border);
 }
@@ -395,22 +391,23 @@
 
 /* Main Content Area - lives in grid row 2 */
 .app-main {
-  grid-row: 2;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  /* Content starts at top, no centering */
+  flex: 1;
+  position: relative;
+  /* Removal of overflow-y for native pull-to-refresh */
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  /* NO padding-top/padding-bottom compensation — grid handles spacing */
 }
 
 /* Bottom Navigation - lives in grid row 3 */
 .app-nav {
-  grid-row: 3;
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   padding-bottom: var(--safe-area-inset-bottom);
+  height: calc(var(--app-nav-h) + var(--safe-area-inset-bottom));
   background-color: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border);
 }
@@ -497,13 +494,13 @@
 
 .header {
   position: sticky;
-  top: 0; /* Sticky to top of scrollable .app-main */
+  top: 55px; /* Sticky to top of scrollable .app-main */
   z-index: calc(var(--z-sticky) - 2);
   display: flex;
   align-items: center;
   gap: var(--space-4);
   min-height: 56px;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) 30px;
   margin: calc(var(--space-4) * -1);
   margin-bottom: var(--space-4);
   background-color: var(--color-bg-primary);

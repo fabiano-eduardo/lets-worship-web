@@ -336,6 +336,8 @@ export type Query = {
   songs: SongsResult;
   /** Pull incremental changes since a cursor. Use for sync. */
   syncPull: SyncPullResult;
+  /** Sync status/probe with server revision and entity counts */
+  syncStatus: SyncStatus;
 };
 
 export type QueryGetEntityStateArgs = {
@@ -500,6 +502,13 @@ export type SyncEntitiesSnapshot = {
   versions?: Maybe<Array<SongVersion>>;
 };
 
+export type SyncEntityCounts = {
+  mapItems: Scalars["Int"]["output"];
+  notes: Scalars["Int"]["output"];
+  songs: Scalars["Int"]["output"];
+  versions: Scalars["Int"]["output"];
+};
+
 export type SyncMeta = {
   lastMutationId?: Maybe<Scalars["String"]["output"]>;
   updatedByDeviceId?: Maybe<Scalars["String"]["output"]>;
@@ -526,23 +535,47 @@ export type SyncMutationInput = {
 };
 
 export type SyncPullInput = {
+  /** Device ID (optional, for diagnostics) */
+  deviceId?: InputMaybe<Scalars["String"]["input"]>;
   /** Include entity snapshots in response to reduce round-trips */
   includeEntities?: InputMaybe<Scalars["Boolean"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   /** Cursor from previous pull (ULID) */
   sinceCursor?: InputMaybe<Scalars["String"]["input"]>;
+  /** Force a full snapshot pull (ignores changeLog) */
+  snapshotAll?: InputMaybe<Scalars["Boolean"]["input"]>;
+  /** Per-entity snapshot cursor (document IDs) */
+  snapshotCursor?: InputMaybe<SyncSnapshotCursorInput>;
+  /** Snapshot page size (per entity) */
+  snapshotLimit?: InputMaybe<Scalars["Int"]["input"]>;
+  /** Fetch snapshots updated after this ISO timestamp */
+  snapshotSince?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type SyncPullResult = {
   changes: Array<ChangeLogEntry>;
+  /** Indicates client cursor is ahead of server state */
+  cursorResetSuggested?: Maybe<Scalars["Boolean"]["output"]>;
   /** Entity snapshots if includeEntities was true */
   entities?: Maybe<SyncEntitiesSnapshot>;
   /** Whether there are more changes available */
   hasMore: Scalars["Boolean"]["output"];
+  /** Timestamp of latest changelog entry (diagnostic) */
+  lastChangeAt?: Maybe<Scalars["String"]["output"]>;
   /** Cursor for next pull */
   nextCursor?: Maybe<Scalars["String"]["output"]>;
+  /** Latest server changelog cursor (diagnostic) */
+  serverCursor?: Maybe<Scalars["String"]["output"]>;
+  /** Max rev in changelog (diagnostic) */
+  serverRev?: Maybe<Scalars["Int"]["output"]>;
   /** Current server time as ISO string */
   serverTime: Scalars["String"]["output"];
+  /** Snapshot pagination state (per entity) */
+  snapshotHasMore?: Maybe<SyncSnapshotHasMore>;
+  /** Next snapshot cursor (per entity) when snapshot mode is used */
+  snapshotNextCursor?: Maybe<SyncSnapshotCursor>;
+  /** Reason for snapshot mode if used */
+  snapshotReason?: Maybe<Scalars["String"]["output"]>;
 };
 
 export type SyncPushInput = {
@@ -557,8 +590,37 @@ export type SyncPushResult = {
   serverTime: Scalars["String"]["output"];
 };
 
+export type SyncSnapshotCursor = {
+  mapItems?: Maybe<Scalars["String"]["output"]>;
+  notes?: Maybe<Scalars["String"]["output"]>;
+  songs?: Maybe<Scalars["String"]["output"]>;
+  versions?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type SyncSnapshotCursorInput = {
+  mapItems?: InputMaybe<Scalars["String"]["input"]>;
+  notes?: InputMaybe<Scalars["String"]["input"]>;
+  songs?: InputMaybe<Scalars["String"]["input"]>;
+  versions?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type SyncSnapshotHasMore = {
+  mapItems: Scalars["Boolean"]["output"];
+  notes: Scalars["Boolean"]["output"];
+  songs: Scalars["Boolean"]["output"];
+  versions: Scalars["Boolean"]["output"];
+};
+
+export type SyncStatus = {
+  counts: SyncEntityCounts;
+  lastChangeAt?: Maybe<Scalars["String"]["output"]>;
+  ownerUid: Scalars["String"]["output"];
+  serverCursor?: Maybe<Scalars["String"]["output"]>;
+  serverRev?: Maybe<Scalars["Int"]["output"]>;
+};
+
 /** Major or minor quality */
-export type TonalQuality = "MAJOR" | "MINOR";
+export type TonalQuality = "major" | "minor";
 
 export type UpdateSectionNoteInput = {
   anchor?: InputMaybe<AnchorInput>;
