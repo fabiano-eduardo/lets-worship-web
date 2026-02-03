@@ -13,13 +13,19 @@ import {
   IconChevronDown,
 } from "@/shared/ui";
 import { ChordEditor } from "./ChordEditor";
-import type { SectionBlock, SequenceItem, NoteName } from "@/shared/types";
+import type { SectionBlock, SongMapItem, NoteName } from "@/shared/types";
+import {
+  groupMapItems,
+  normalizeMapItemsOrder,
+  sortMapItems,
+} from "@/shared/utils/mapItems";
 
 interface SectionEditorProps {
   sections: SectionBlock[];
-  sequence: SequenceItem[];
+  mapItems: SongMapItem[];
+  songVersionId: string;
   onSectionsChange: (sections: SectionBlock[]) => void;
-  onSequenceChange: (sequence: SequenceItem[]) => void;
+  onMapItemsChange: (mapItems: SongMapItem[]) => void;
   originalKey?: NoteName;
   targetKey?: NoteName;
 }
@@ -38,9 +44,10 @@ const DEFAULT_SECTION_NAMES = [
 
 export function SectionEditor({
   sections,
-  sequence,
+  mapItems,
+  songVersionId,
   onSectionsChange,
-  onSequenceChange,
+  onMapItemsChange,
   originalKey,
   targetKey,
 }: SectionEditorProps) {
@@ -64,7 +71,15 @@ export function SectionEditor({
     onSectionsChange([...sections, newSection]);
 
     // Auto-add to sequence
-    onSequenceChange([...sequence, { sectionId: newSection.id, repeat: 1 }]);
+    const newItem: SongMapItem = {
+      id: crypto.randomUUID(),
+      songVersionId,
+      sectionId: newSection.id,
+      order: mapItems.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    onMapItemsChange(normalizeMapItemsOrder([...mapItems, newItem]));
 
     setNewSectionName("");
     setIsNewSectionModalOpen(false);
@@ -84,7 +99,11 @@ export function SectionEditor({
   // Delete section
   const handleDeleteSection = (id: string) => {
     onSectionsChange(sections.filter((s) => s.id !== id));
-    onSequenceChange(sequence.filter((s) => s.sectionId !== id));
+    onMapItemsChange(
+      normalizeMapItemsOrder(
+        mapItems.filter((item) => item.sectionId !== id),
+      ),
+    );
     if (editingSection?.id === id) {
       setEditingSection(null);
     }
@@ -92,29 +111,82 @@ export function SectionEditor({
 
   // Sequence management
   const handleAddToSequence = (sectionId: string) => {
-    onSequenceChange([...sequence, { sectionId, repeat: 1 }]);
+    const newItem: SongMapItem = {
+      id: crypto.randomUUID(),
+      songVersionId,
+      sectionId,
+      order: mapItems.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    onMapItemsChange(normalizeMapItemsOrder([...mapItems, newItem]));
   };
 
   const handleRemoveFromSequence = (index: number) => {
-    onSequenceChange(sequence.filter((_, i) => i !== index));
+    const groups = groupMapItems(sortMapItems(mapItems));
+    const group = groups[index];
+    if (!group) return;
+    const remaining = sortMapItems(mapItems).filter(
+      (item) => !group.items.includes(item),
+    );
+    onMapItemsChange(normalizeMapItemsOrder(remaining));
   };
 
   const handleMoveSequenceItem = (index: number, direction: "up" | "down") => {
-    const newSequence = [...sequence];
+    const groups = groupMapItems(sortMapItems(mapItems));
     const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= sequence.length) return;
+    if (newIndex < 0 || newIndex >= groups.length) return;
 
-    [newSequence[index], newSequence[newIndex]] = [
-      newSequence[newIndex],
-      newSequence[index],
+    const newGroups = [...groups];
+    [newGroups[index], newGroups[newIndex]] = [
+      newGroups[newIndex],
+      newGroups[index],
     ];
-    onSequenceChange(newSequence);
+    const reordered = newGroups.flatMap((group) => group.items);
+    onMapItemsChange(normalizeMapItemsOrder(reordered));
   };
 
   const handleUpdateRepeat = (index: number, repeat: number) => {
-    const newSequence = [...sequence];
-    newSequence[index] = { ...newSequence[index], repeat: Math.max(1, repeat) };
-    onSequenceChange(newSequence);
+    const safeRepeat = Math.max(1, repeat);
+    const groups = groupMapItems(sortMapItems(mapItems));
+    const group = groups[index];
+    if (!group) return;
+
+    const currentCount = group.items.length;
+    if (safeRepeat === currentCount) return;
+
+    const now = new Date().toISOString();
+    let updatedItems = [...mapItems];
+
+    if (safeRepeat > currentCount) {
+      const toAdd = safeRepeat - currentCount;
+      const additions: SongMapItem[] = Array.from({ length: toAdd }).map(() => ({
+        id: crypto.randomUUID(),
+        songVersionId,
+        sectionId: group.sectionId,
+        labelOverride: group.labelOverride,
+        order: 0,
+        createdAt: now,
+        updatedAt: now,
+      }));
+
+      const ordered = sortMapItems(updatedItems);
+      const insertAfter = group.items[group.items.length - 1];
+      const insertIndex = ordered.findIndex((item) => item.id === insertAfter.id);
+      const next = [...ordered];
+      next.splice(insertIndex + 1, 0, ...additions);
+      updatedItems = next;
+    } else {
+      const toRemove = currentCount - safeRepeat;
+      const idsToRemove = new Set(
+        group.items.slice(-toRemove).map((item) => item.id),
+      );
+      updatedItems = sortMapItems(mapItems).filter(
+        (item) => !idsToRemove.has(item.id),
+      );
+    }
+
+    onMapItemsChange(normalizeMapItemsOrder(updatedItems));
   };
 
   const getSectionName = (sectionId: string) => {
@@ -216,13 +288,14 @@ export function SectionEditor({
       <div className="section">
         <h3 className="section__title">Sequência do arranjo</h3>
 
-        {sequence.length === 0 ? (
+        {mapItems.length === 0 ? (
           <p className="text-muted text-sm">
             A sequência será preenchida automaticamente ao criar seções
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {sequence.map((item, index) => (
+            {groupMapItems(sortMapItems(mapItems), sections).map(
+              (group, index) => (
               <div key={index} className="card p-3 flex items-center gap-3">
                 <div className="flex flex-col gap-1">
                   <Button
@@ -246,7 +319,7 @@ export function SectionEditor({
                 </div>
 
                 <span className="font-medium flex-1">
-                  {getSectionName(item.sectionId)}
+                  {group.labelOverride || getSectionName(group.sectionId)}
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -255,7 +328,7 @@ export function SectionEditor({
                     type="number"
                     min={1}
                     max={10}
-                    value={item.repeat || 1}
+                    value={group.items.length}
                     onChange={(e) =>
                       handleUpdateRepeat(index, parseInt(e.target.value) || 1)
                     }
@@ -273,7 +346,8 @@ export function SectionEditor({
                   <IconTrash size={14} />
                 </Button>
               </div>
-            ))}
+            ),
+            )}
           </div>
         )}
       </div>

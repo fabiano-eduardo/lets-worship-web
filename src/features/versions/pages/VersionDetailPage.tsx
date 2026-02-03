@@ -1,6 +1,6 @@
 // Version detail/editor page
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { useSong } from "@/features/songs/hooks/useSongs";
 import { useSectionNotes } from "@/features/songs/hooks/useSectionNotes";
@@ -10,6 +10,10 @@ import {
   useDeleteVersion,
   useTogglePin,
 } from "../hooks/useVersions";
+import {
+  useSongMapItems,
+  useReplaceSongMapItems,
+} from "../hooks/useSongMapItems";
 import {
   PageHeader,
   Button,
@@ -44,9 +48,16 @@ import type {
   TonalQuality,
   ModalMode,
   SectionBlock,
-  SequenceItem,
+  SongMapItem,
   SectionNoteEntity,
 } from "@/shared/types";
+import {
+  buildMapItemsFromArrangement,
+  buildSequenceFromMapItems,
+  groupMapItems,
+  sortMapItems,
+} from "@/shared/utils/mapItems";
+import { buildExecutionPlan } from "@/shared/utils/executionPlan";
 import {
   VALID_NOTE_NAMES,
   VALID_TIME_SIGNATURES,
@@ -86,9 +97,12 @@ export function VersionDetailPage() {
   const { data: song, isLoading: songLoading } = useSong(songId);
   const { data: version, isLoading: versionLoading } = useVersion(versionId);
   const { data: sectionNotes = [] } = useSectionNotes(versionId);
+  const { data: mapItemsData = [], isLoading: mapItemsLoading } =
+    useSongMapItems(versionId);
   const updateVersion = useUpdateVersion();
   const deleteVersion = useDeleteVersion();
   const togglePin = useTogglePin();
+  const replaceSongMapItems = useReplaceSongMapItems();
 
   const [viewMode, setViewMode] = useState<ViewMode>("view");
   const [targetKey, setTargetKey] = useState<NoteName | null>(null);
@@ -114,12 +128,23 @@ export function VersionDetailPage() {
 
   // Arrangement state
   const [sections, setSections] = useState<SectionBlock[]>([]);
-  const [sequence, setSequence] = useState<SequenceItem[]>([]);
+  const [mapItems, setMapItems] = useState<SongMapItem[]>([]);
   const [hasArrangementChanges, setHasArrangementChanges] = useState(false);
 
   // Helper to get notes for a specific section
   const getNotesForSection = (sectionId: string): SectionNoteEntity[] => {
     return sectionNotes.filter((n) => n.sectionId === sectionId);
+  };
+
+  const getNotesForStep = (
+    sectionId: string,
+    occurrenceId: string,
+  ): SectionNoteEntity[] => {
+    return sectionNotes.filter(
+      (n) =>
+        n.sectionId === sectionId &&
+        (n.occurrenceId == null || n.occurrenceId === occurrenceId),
+    );
   };
 
   // Helper to check anchor position (for filtering)
@@ -135,27 +160,53 @@ export function VersionDetailPage() {
   };
 
   // Initialize edit state when version loads
-  useMemo(() => {
-    if (version) {
-      setEditLabel(version.label);
-      setEditBpm(version.musicalMeta.bpm?.toString() || "");
-      setEditTimeSignature(version.musicalMeta.timeSignature || "");
+  useEffect(() => {
+    if (!version) return;
+    setEditLabel(version.label);
+    setEditBpm(version.musicalMeta.bpm?.toString() || "");
+    setEditTimeSignature(version.musicalMeta.timeSignature || "");
 
-      if (version.musicalMeta.originalKey) {
-        setEditKeyRoot(version.musicalMeta.originalKey.root);
-        if (version.musicalMeta.originalKey.type === "tonal") {
-          setEditKeyType("tonal");
-          setEditTonalQuality(version.musicalMeta.originalKey.tonalQuality);
-        } else {
-          setEditKeyType("modal");
-          setEditMode(version.musicalMeta.originalKey.mode);
-        }
+    if (version.musicalMeta.originalKey) {
+      setEditKeyRoot(version.musicalMeta.originalKey.root);
+      if (version.musicalMeta.originalKey.type === "tonal") {
+        setEditKeyType("tonal");
+        setEditTonalQuality(version.musicalMeta.originalKey.tonalQuality);
+      } else {
+        setEditKeyType("modal");
+        setEditMode(version.musicalMeta.originalKey.mode);
       }
-
-      setSections(version.arrangement.sections);
-      setSequence(version.arrangement.sequence);
     }
+
+    setSections(version.arrangement.sections);
+    setHasArrangementChanges(false);
   }, [version?.id]);
+
+  useEffect(() => {
+    if (!version || mapItemsLoading || hasArrangementChanges) return;
+    const initial =
+      mapItemsData.length > 0
+        ? mapItemsData
+        : buildMapItemsFromArrangement({
+            songVersionId: version.id,
+            sections: version.arrangement.sections,
+            sequence: version.arrangement.sequence,
+          });
+
+    setMapItems(sortMapItems(initial));
+
+    if (
+      mapItemsData.length === 0 &&
+      (version.arrangement.sections.length > 0 ||
+        version.arrangement.sequence.length > 0)
+    ) {
+      void replaceSongMapItems
+        .mutateAsync({
+          songVersionId: version.id,
+          items: initial,
+        })
+        .catch(() => {});
+    }
+  }, [version?.id, mapItemsLoading, mapItemsData, hasArrangementChanges]);
 
   // Loading states
   if (songLoading || versionLoading) {
@@ -200,11 +251,16 @@ export function VersionDetailPage() {
 
   const handleSaveArrangement = async () => {
     try {
+      const sequence = buildSequenceFromMapItems(mapItems);
       await updateVersion.mutateAsync({
         id: version.id,
         input: {
           arrangement: { sections, sequence },
         },
+      });
+      await replaceSongMapItems.mutateAsync({
+        songVersionId: version.id,
+        items: mapItems,
       });
       setHasArrangementChanges(false);
       showToast("success", "Arranjo salvo!");
@@ -261,24 +317,28 @@ export function VersionDetailPage() {
     setHasArrangementChanges(true);
   };
 
-  const handleSequenceChange = (newSequence: SequenceItem[]) => {
-    setSequence(newSequence);
+  const handleMapItemsChange = (newMapItems: SongMapItem[]) => {
+    setMapItems(newMapItems);
     setHasArrangementChanges(true);
   };
 
   const originalKey = version.musicalMeta.originalKey;
   const effectiveTargetKey = targetKey || originalKey?.root || null;
 
-  // Build sequence display data
-  const sequenceDisplayData = sequence.map((item) => {
-    const section = sections.find((s) => s.id === item.sectionId);
-    return {
-      sectionId: item.sectionId,
-      sectionName: section?.name || "Unknown",
-      repeat: item.repeat,
-      notes: item.sequenceNotes,
-    };
-  });
+  // Build sequence display data (grouped for UI)
+  const sequenceDisplayData = useMemo(() => {
+    const groups = groupMapItems(mapItems, sections);
+    return groups.map((group) => ({
+      sectionId: group.sectionId,
+      sectionName: group.labelOverride || group.sectionName || "Unknown",
+      repeat: group.items.length,
+    }));
+  }, [mapItems, sections]);
+
+  const executionSteps = useMemo(
+    () => buildExecutionPlan(sections, mapItems),
+    [sections, mapItems],
+  );
 
   // Performance mode
   if (viewMode === "performance") {
@@ -336,22 +396,24 @@ export function VersionDetailPage() {
         <SequenceDisplay sequence={sequenceDisplayData} />
 
         <div className="px-4">
-          {sections.map((section) => {
-            const sectionNotesForSection = getNotesForSection(section.id);
+          {executionSteps.map((step) => {
+            const section = step.section;
+            const stepNotes = getNotesForStep(step.sectionId, step.id);
+
             return (
-              <div key={section.id}>
+              <div key={step.id}>
                 {/* Start notes */}
                 {showNotes && (
                   <SectionNotesDisplay
-                    notes={sectionNotesForSection}
+                    notes={stepNotes}
                     filter="start"
                     compact
                   />
                 )}
                 <SectionDisplay
-                  name={section.name}
-                  chordProText={section.chordProText}
-                  notes={showNotes ? section.notes : []}
+                  name={step.displayName}
+                  chordProText={section?.chordProText || ""}
+                  notes={showNotes ? section?.notes || [] : []}
                   originalKey={originalKey?.root}
                   targetKey={effectiveTargetKey || undefined}
                   fontSize="xlarge"
@@ -361,12 +423,13 @@ export function VersionDetailPage() {
                 {/* General and end notes */}
                 {showNotes && (
                   <SectionNotesDisplay
-                    notes={sectionNotesForSection.filter((n) => {
+                    notes={stepNotes.filter((n) => {
                       const pos = getAnchorPosition(n.anchor);
                       return pos === "general" || pos === "end";
                     })}
                   />
                 )}
+                {/* Section note editor is not shown in performance mode */}
               </div>
             );
           })}
@@ -540,9 +603,10 @@ export function VersionDetailPage() {
           <>
             <SectionEditor
               sections={sections}
-              sequence={sequence}
+              mapItems={mapItems}
+              songVersionId={version.id}
               onSectionsChange={handleSectionsChange}
-              onSequenceChange={handleSequenceChange}
+              onMapItemsChange={handleMapItemsChange}
               originalKey={originalKey?.root}
               targetKey={effectiveTargetKey || undefined}
             />
@@ -565,7 +629,7 @@ export function VersionDetailPage() {
             <SequenceDisplay sequence={sequenceDisplayData} />
 
             {/* Sections display */}
-            {sections.length === 0 ? (
+            {executionSteps.length === 0 ? (
               <EmptyState
                 title="Nenhuma seção"
                 description="Adicione seções no modo de edição"
@@ -577,26 +641,32 @@ export function VersionDetailPage() {
                 }
               />
             ) : (
-              sections.map((section) => {
-                const sectionNotesForSection = getNotesForSection(section.id);
+              executionSteps.map((step) => {
+                const section = step.section;
+                const sectionNotesForSection = getNotesForSection(
+                  step.sectionId,
+                );
+                const stepNotes = getNotesForStep(step.sectionId, step.id);
+
                 return (
-                  <div key={section.id}>
+                  <div key={step.id}>
                     <SectionDisplay
-                      name={section.name}
-                      chordProText={section.chordProText}
-                      notes={section.notes}
+                      name={step.displayName}
+                      chordProText={section?.chordProText || ""}
+                      notes={section?.notes || []}
                       originalKey={originalKey?.root}
                       targetKey={effectiveTargetKey || undefined}
                     />
                     {/* Section notes display */}
-                    {sectionNotesForSection.length > 0 && (
-                      <SectionNotesDisplay notes={sectionNotesForSection} />
+                    {stepNotes.length > 0 && (
+                      <SectionNotesDisplay notes={stepNotes} />
                     )}
                     {/* Section note editor */}
                     <SectionNoteEditor
                       versionId={versionId}
-                      sectionId={section.id}
+                      sectionId={step.sectionId}
                       sectionNotes={sectionNotesForSection}
+                      occurrenceId={step.id}
                     />
                   </div>
                 );

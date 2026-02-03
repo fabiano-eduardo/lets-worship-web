@@ -7,6 +7,7 @@ import type { SectionNoteEntity, SectionNoteAnchor } from "@/shared/types";
 export interface CreateSectionNoteInput {
   versionId: string;
   sectionId: string;
+  occurrenceId?: string | null;
   anchor: SectionNoteAnchor;
   text: string;
 }
@@ -14,6 +15,7 @@ export interface CreateSectionNoteInput {
 export interface UpdateSectionNoteInput {
   anchor?: SectionNoteAnchor;
   text?: string;
+  occurrenceId?: string | null;
 }
 
 export const sectionNotesRepository = {
@@ -49,6 +51,7 @@ export const sectionNotesRepository = {
       id: crypto.randomUUID(),
       versionId: input.versionId,
       sectionId: input.sectionId,
+      occurrenceId: input.occurrenceId ?? null,
       anchor: input.anchor,
       text: input.text,
       createdAt: now,
@@ -68,6 +71,7 @@ export const sectionNotesRepository = {
         id: note.id,
         versionId: note.versionId,
         sectionId: note.sectionId,
+        occurrenceId: note.occurrenceId ?? null,
         anchor: note.anchor,
         text: note.text,
         createdAt: note.createdAt,
@@ -110,6 +114,7 @@ export const sectionNotesRepository = {
         id: updated.id,
         versionId: updated.versionId,
         sectionId: updated.sectionId,
+        occurrenceId: updated.occurrenceId ?? null,
         anchor: updated.anchor,
         text: updated.text,
         createdAt: updated.createdAt,

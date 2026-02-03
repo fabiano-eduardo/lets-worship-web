@@ -5,16 +5,19 @@ import type {
   Song,
   SongVersion,
   SectionNoteEntity,
+  SongMapItem,
   OutboxItem,
   SyncState,
   SyncConflict,
   UserSettings,
 } from "@/shared/types";
+import { buildMapItemsFromArrangement } from "@/shared/utils/mapItems";
 
 export class LetsWorshipDB extends Dexie {
   songs!: Table<Song, string>;
   versions!: Table<SongVersion, string>;
   sectionNotes!: Table<SectionNoteEntity, string>;
+  songMapItems!: Table<SongMapItem, string>;
   outbox!: Table<OutboxItem, string>;
   syncState!: Table<SyncState, string>;
   conflicts!: Table<SyncConflict, string>;
@@ -38,12 +41,56 @@ export class LetsWorshipDB extends Dexie {
       versions:
         "id, songId, label, pinnedOffline, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
       sectionNotes:
-        "id, versionId, sectionId, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
+        "id, versionId, sectionId, occurrenceId, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
       outbox: "id, deviceId, entityType, entityId, status, createdAt",
       syncState: "id",
       conflicts: "id, entityType, entityId, resolved, createdAt",
       settings: "id",
     });
+
+    // Version 3: Add song map items (explicit occurrences)
+    this.version(3)
+      .stores({
+        songs:
+          "id, title, artist, defaultVersionId, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
+        versions:
+          "id, songId, label, pinnedOffline, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
+        sectionNotes:
+          "id, versionId, sectionId, occurrenceId, createdAt, updatedAt, remoteId, remoteRev, dirty, deleted",
+        songMapItems:
+          "id, songVersionId, sectionId, order, createdAt, updatedAt",
+        outbox: "id, deviceId, entityType, entityId, status, createdAt",
+        syncState: "id",
+        conflicts: "id, entityType, entityId, resolved, createdAt",
+        settings: "id",
+      })
+      .upgrade(async (tx) => {
+        const versions = await tx.table("versions").toArray();
+        const mapItemsTable = tx.table("songMapItems");
+        const notesTable = tx.table("sectionNotes");
+
+        for (const version of versions) {
+          const arrangement = version.arrangement;
+          if (!arrangement) continue;
+
+          const items = buildMapItemsFromArrangement({
+            songVersionId: version.id,
+            sections: arrangement.sections || [],
+            sequence: arrangement.sequence || [],
+          });
+
+          if (items.length > 0) {
+            await mapItemsTable.bulkAdd(items);
+          }
+        }
+
+        // Ensure existing notes default to template scope
+        await notesTable.toCollection().modify((note) => {
+          if (note.occurrenceId === undefined) {
+            note.occurrenceId = null;
+          }
+        });
+      });
   }
 }
 
@@ -53,11 +100,19 @@ export const db = new LetsWorshipDB();
 export async function clearAllData(): Promise<void> {
   await db.transaction(
     "rw",
-    [db.songs, db.versions, db.sectionNotes, db.outbox, db.conflicts],
+    [
+      db.songs,
+      db.versions,
+      db.sectionNotes,
+      db.songMapItems,
+      db.outbox,
+      db.conflicts,
+    ],
     async () => {
       await db.songs.clear();
       await db.versions.clear();
       await db.sectionNotes.clear();
+      await db.songMapItems.clear();
       await db.outbox.clear();
       await db.conflicts.clear();
     },

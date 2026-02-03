@@ -76,6 +76,7 @@ export interface SectionNoteEntity {
   id: string;
   versionId: string;
   sectionId: string;
+  occurrenceId?: string | null;
   anchor: SectionNoteAnchor;
   text: string;
   createdAt: string;
@@ -98,6 +99,16 @@ export interface SequenceItem {
   sectionId: string;
   repeat?: number; // default 1
   sequenceNotes?: string[];
+}
+
+export interface SongMapItem {
+  id: string;
+  songVersionId: string;
+  sectionId: string;
+  order: number;
+  labelOverride?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface VersionArrangement {

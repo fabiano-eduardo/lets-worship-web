@@ -49,6 +49,7 @@ export function useCreateSectionNote() {
     mutationFn: (input: {
       versionId: string;
       sectionId: string;
+      occurrenceId?: string | null;
       anchor: SectionNoteAnchor;
       text: string;
     }) => sectionNotesRepository.create(input),
@@ -72,6 +73,7 @@ export function useUpdateSectionNote() {
       id: string;
       anchor?: SectionNoteAnchor;
       text?: string;
+      occurrenceId?: string | null;
     }) => sectionNotesRepository.update(id, input),
     onSuccess: (note) => {
       if (note) {

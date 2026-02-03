@@ -1,7 +1,6 @@
 // Section Notes Display - shows notes for a section in view/performance mode
 
 import type { SectionNoteEntity, SectionNoteAnchor } from "@/shared/types";
-import { IconNote } from "@/shared/ui";
 
 // Simple anchor positions for filtering
 type AnchorPosition = "start" | "general" | "end" | "all";
@@ -41,10 +40,9 @@ export function SectionNotesDisplay({
         {filteredNotes.map((note) => (
           <span
             key={note.id}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-yellow-500/20 text-yellow-300"
+            className="inline-flex items-center px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-100/80 border border-yellow-500/20"
             title={note.text}
           >
-            <IconNote size={12} />
             {note.text.length > 30
               ? note.text.substring(0, 30) + "..."
               : note.text}
@@ -59,10 +57,9 @@ export function SectionNotesDisplay({
       {filteredNotes.map((note) => (
         <div
           key={note.id}
-          className="flex items-start gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border-l-2 border-yellow-500/50"
+          className="px-3 py-2 rounded-lg bg-yellow-500/5 border-l-2 border-yellow-500/40"
         >
-          <IconNote size={16} className="text-yellow-500 shrink-0 mt-0.5" />
-          <span className="text-sm text-yellow-100">{note.text}</span>
+          <span className="text-sm text-yellow-100/80">{note.text}</span>
         </div>
       ))}
     </div>

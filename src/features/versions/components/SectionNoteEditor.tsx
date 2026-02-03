@@ -1,6 +1,6 @@
 // Section Note Editor - allows adding/editing notes for a section
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useCreateSectionNote,
   useUpdateSectionNote,
@@ -38,12 +38,14 @@ interface SectionNoteEditorProps {
   versionId: string;
   sectionId: string;
   sectionNotes: SectionNoteEntity[];
+  occurrenceId?: string | null;
 }
 
 export function SectionNoteEditor({
   versionId,
   sectionId,
   sectionNotes,
+  occurrenceId,
 }: SectionNoteEditorProps) {
   const { showToast } = useToast();
   const createNote = useCreateSectionNote();
@@ -54,6 +56,18 @@ export function SectionNoteEditor({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePosition, setNotePosition] = useState<AnchorPosition>("general");
+  const [noteScope, setNoteScope] = useState<"occurrence" | "template">(
+    occurrenceId ? "occurrence" : "template",
+  );
+
+  const templateNotes = sectionNotes.filter((n) => !n.occurrenceId);
+  const occurrenceNotes = occurrenceId
+    ? sectionNotes.filter((n) => n.occurrenceId === occurrenceId)
+    : [];
+
+  useEffect(() => {
+    setNoteScope(occurrenceId ? "occurrence" : "template");
+  }, [occurrenceId]);
 
   const handleAdd = async () => {
     if (!noteText.trim()) return;
@@ -62,11 +76,13 @@ export function SectionNoteEditor({
       await createNote.mutateAsync({
         versionId,
         sectionId,
+        occurrenceId: noteScope === "occurrence" ? occurrenceId ?? null : null,
         text: noteText.trim(),
         anchor: positionToAnchor(notePosition),
       });
       setNoteText("");
       setNotePosition("general");
+      setNoteScope(occurrenceId ? "occurrence" : "template");
       setIsAdding(false);
       showToast("success", "Nota adicionada");
     } catch {
@@ -112,6 +128,7 @@ export function SectionNoteEditor({
     setIsAdding(false);
     setNoteText("");
     setNotePosition("general");
+    setNoteScope(occurrenceId ? "occurrence" : "template");
   };
 
   const formatPosition = (position: AnchorPosition): string => {
@@ -136,90 +153,224 @@ export function SectionNoteEditor({
   return (
     <div className="mt-2 mb-4 p-3 bg-surface rounded-lg">
       {/* Existing notes */}
-      {sectionNotes.length > 0 && (
-        <div className="flex flex-col gap-2 mb-3">
-          {sectionNotes.map((note) => {
-            const position = anchorToPosition(note.anchor);
-            return (
-              <div key={note.id} className="flex items-start gap-2 text-sm">
-                {editingNoteId === note.id ? (
-                  <div className="flex-1 flex flex-col gap-2">
-                    <textarea
-                      className="input w-full text-sm"
-                      value={noteText}
-                      onChange={(e) => setNoteText(e.target.value)}
-                      rows={2}
-                      placeholder="Texto da nota..."
-                      autoFocus
-                    />
-                    <div className="flex gap-2 items-center">
-                      <select
-                        className="input text-sm"
-                        value={notePosition}
-                        onChange={(e) =>
-                          setNotePosition(e.target.value as AnchorPosition)
-                        }
-                      >
-                        {positionOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleUpdate(note.id)}
-                          isLoading={updateNote.isPending}
-                        >
-                          Salvar
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={cancelEditing}
-                        >
-                          Cancelar
-                        </Button>
+      <div className="flex flex-col gap-4 mb-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted mb-2">
+            Notas gerais do trecho
+          </p>
+          {templateNotes.length === 0 ? (
+            <p className="text-xs text-muted">Nenhuma nota geral.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {templateNotes.map((note) => {
+                const position = anchorToPosition(note.anchor);
+                return (
+                  <div key={note.id} className="flex items-start gap-2 text-sm">
+                    {editingNoteId === note.id ? (
+                      <div className="flex-1 flex flex-col gap-2">
+                        <textarea
+                          className="input w-full text-sm"
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          rows={2}
+                          placeholder="Texto da nota..."
+                          autoFocus
+                        />
+                        <div className="flex gap-2 items-center">
+                          <select
+                            className="input text-sm"
+                            value={notePosition}
+                            onChange={(e) =>
+                              setNotePosition(e.target.value as AnchorPosition)
+                            }
+                          >
+                            {positionOptions.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleUpdate(note.id)}
+                              isLoading={updateNote.isPending}
+                            >
+                              Salvar
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={cancelEditing}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <span
+                          className="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-300 shrink-0"
+                          title={formatPosition(position)}
+                        >
+                          {formatPosition(position)}
+                        </span>
+                        <span className="flex-1 text-secondary">
+                          {note.text}
+                        </span>
+                        {occurrenceId && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await createNote.mutateAsync({
+                                  versionId,
+                                  sectionId,
+                                  occurrenceId,
+                                  text: note.text,
+                                  anchor: note.anchor,
+                                });
+                                showToast(
+                                  "success",
+                                  "Nota duplicada para esta execução",
+                                );
+                              } catch {
+                                showToast("error", "Erro ao duplicar nota");
+                              }
+                            }}
+                          >
+                            Duplicar para esta execução
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isIcon
+                          onClick={() => startEditing(note)}
+                          aria-label="Editar"
+                        >
+                          <IconEdit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isIcon
+                          onClick={() => handleDelete(note.id)}
+                          isLoading={deleteNote.isPending}
+                          aria-label="Remover"
+                        >
+                          <IconTrash size={14} />
+                        </Button>
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <span
-                      className="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-300 shrink-0"
-                      title={formatPosition(position)}
-                    >
-                      {formatPosition(position)}
-                    </span>
-                    <span className="flex-1 text-secondary">{note.text}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isIcon
-                      onClick={() => startEditing(note)}
-                      aria-label="Editar"
-                    >
-                      <IconEdit size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isIcon
-                      onClick={() => handleDelete(note.id)}
-                      isLoading={deleteNote.isPending}
-                      aria-label="Remover"
-                    >
-                      <IconTrash size={14} />
-                    </Button>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted mb-2">
+            Notas desta execução
+          </p>
+          {!occurrenceId ? (
+            <p className="text-xs text-muted">
+              Esta execução não está disponível.
+            </p>
+          ) : occurrenceNotes.length === 0 ? (
+            <p className="text-xs text-muted">Nenhuma nota específica.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {occurrenceNotes.map((note) => {
+                const position = anchorToPosition(note.anchor);
+                return (
+                  <div key={note.id} className="flex items-start gap-2 text-sm">
+                    {editingNoteId === note.id ? (
+                      <div className="flex-1 flex flex-col gap-2">
+                        <textarea
+                          className="input w-full text-sm"
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          rows={2}
+                          placeholder="Texto da nota..."
+                          autoFocus
+                        />
+                        <div className="flex gap-2 items-center">
+                          <select
+                            className="input text-sm"
+                            value={notePosition}
+                            onChange={(e) =>
+                              setNotePosition(e.target.value as AnchorPosition)
+                            }
+                          >
+                            {positionOptions.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleUpdate(note.id)}
+                              isLoading={updateNote.isPending}
+                            >
+                              Salvar
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={cancelEditing}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span
+                          className="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-300 shrink-0"
+                          title={formatPosition(position)}
+                        >
+                          {formatPosition(position)}
+                        </span>
+                        <span className="flex-1 text-secondary">
+                          {note.text}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isIcon
+                          onClick={() => startEditing(note)}
+                          aria-label="Editar"
+                        >
+                          <IconEdit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isIcon
+                          onClick={() => handleDelete(note.id)}
+                          isLoading={deleteNote.isPending}
+                          aria-label="Remover"
+                        >
+                          <IconTrash size={14} />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Add new note form */}
       {isAdding ? (
@@ -233,6 +384,21 @@ export function SectionNoteEditor({
             autoFocus
           />
           <div className="flex gap-2 items-center">
+            <select
+              className="input text-sm"
+              value={noteScope}
+              onChange={(e) =>
+                setNoteScope(e.target.value as "occurrence" | "template")
+              }
+              disabled={!occurrenceId}
+            >
+              <option value="occurrence">
+                Nota desta execução (só aqui)
+              </option>
+              <option value="template">
+                Nota geral do trecho (aparece em todas as vezes)
+              </option>
+            </select>
             <select
               className="input text-sm"
               value={notePosition}
@@ -268,6 +434,7 @@ export function SectionNoteEditor({
           onClick={() => {
             setIsAdding(true);
             setEditingNoteId(null);
+            setNoteScope(occurrenceId ? "occurrence" : "template");
           }}
         >
           <IconPlus size={14} />
