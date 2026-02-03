@@ -81,7 +81,7 @@ export function useSync() {
   const { isOnline } = useNetworkStatus();
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (source: "manual" | "auto" = "manual") => {
     if (!isAuthenticated || !isOnline) {
       console.log("[useSync] Cannot sync: not authenticated or offline");
       return;
@@ -89,7 +89,7 @@ export function useSync() {
 
     setIsSyncing(true);
     try {
-      await syncManager.sync();
+      await syncManager.sync({ source });
       // Invalidate all relevant queries after sync
       queryClient.invalidateQueries({ queryKey: ["songs"] });
       queryClient.invalidateQueries({ queryKey: ["versions"] });
@@ -115,7 +115,7 @@ export function useAutoSync() {
   useEffect(() => {
     if (isOnline && isAuthenticated) {
       console.log("[useAutoSync] Online and authenticated, syncing...");
-      sync();
+      sync("auto");
     }
   }, [isOnline, isAuthenticated, sync]);
 
@@ -124,7 +124,7 @@ export function useAutoSync() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && canSync) {
         console.log("[useAutoSync] Visibility changed to visible, syncing...");
-        sync();
+        sync("auto");
       }
     };
 
@@ -136,7 +136,7 @@ export function useAutoSync() {
   // Initial sync on mount
   useEffect(() => {
     if (canSync) {
-      sync();
+      sync("auto");
     }
     // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -25,8 +25,6 @@ export function useVersion(id: string) {
     queryFn: async () => {
       const a = await versionRepository.getById(id);
 
-      console.log({ a });
-
       return a;
     },
     enabled: !!id,

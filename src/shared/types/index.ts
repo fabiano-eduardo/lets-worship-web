@@ -248,6 +248,11 @@ export interface SyncState {
   lastCursor?: string;
   lastSyncAt?: string;
   lastError?: string;
+  lastPushAt?: string;
+  lastPullAt?: string;
+  lastSyncId?: string;
+  lastSyncSource?: "manual" | "auto";
+  lastServerTime?: string;
   deviceId: string;
 }
 

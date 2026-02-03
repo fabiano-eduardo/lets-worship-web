@@ -35,7 +35,6 @@ export const versionRepository = {
    * Get a single version by ID
    */
   async getById(id: string): Promise<SongVersion | undefined> {
-    console.log({ id });
     const version = await db.versions.get(id);
     if (version?.deleted) return undefined;
     return version;
