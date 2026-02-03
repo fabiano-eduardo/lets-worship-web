@@ -108,6 +108,24 @@ export const SYNC_PULL_QUERY = `
   }
 `;
 
+export const SYNC_PULL_PROBE_QUERY = `
+  query SyncPullProbe($input: SyncPullInput!) {
+    syncPull(input: $input) {
+      changes {
+        entityType
+        entityId
+        op
+        rev
+        cursorId
+        changedAt
+      }
+      nextCursor
+      hasMore
+      serverTime
+    }
+  }
+`;
+
 // Types for sync operations
 export interface SyncPushMutation {
   mutationId: string;
@@ -223,6 +241,15 @@ export interface SyncPullResponse {
   syncPull: {
     changes: SyncPullChange[];
     entities?: SyncEntitiesSnapshot;
+    nextCursor: string | null;
+    hasMore: boolean;
+    serverTime: string;
+  };
+}
+
+export interface SyncPullProbeResponse {
+  syncPull: {
+    changes: SyncPullChange[];
     nextCursor: string | null;
     hasMore: boolean;
     serverTime: string;

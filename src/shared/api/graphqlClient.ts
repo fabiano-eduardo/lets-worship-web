@@ -18,6 +18,13 @@ export interface GraphQLResponse<T = unknown> {
   errors?: GraphQLError[];
 }
 
+export interface GraphQLTraceInfo {
+  status: number;
+  durationMs: number;
+  ok: boolean;
+  error?: string;
+}
+
 export class AuthenticationError extends Error {
   constructor(message: string = "Authentication required") {
     super(message);
@@ -81,9 +88,12 @@ export async function graphqlFetch<T = unknown, V = Record<string, unknown>>(
   variables?: V,
   options: {
     requireAuth?: boolean;
+    headers?: HeadersInit;
+    trace?: (info: GraphQLTraceInfo) => void;
   } = {},
 ): Promise<T> {
-  const { requireAuth = true } = options;
+  const { requireAuth = true, headers: extraHeaders, trace } = options;
+  const requestStart = performance.now();
 
   // Check network status
   if (!isOnline()) {
@@ -101,14 +111,38 @@ export async function graphqlFetch<T = unknown, V = Record<string, unknown>>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
+  if (extraHeaders) {
+    Object.assign(headers, extraHeaders);
+  }
+
   // Make request
-  const response = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
+  let response: Response;
+  try {
+    response = await fetch(GRAPHQL_URL, {
+      method: "POST",
+      headers,
+      cache: "no-store",
+      body: JSON.stringify({
+        query,
+        variables,
+      }),
+    });
+  } catch (error) {
+    const durationMs = Math.round(performance.now() - requestStart);
+    trace?.({
+      status: 0,
+      durationMs,
+      ok: false,
+      error: error instanceof Error ? error.message : "Network error",
+    });
+    throw error;
+  }
+
+  const durationMs = Math.round(performance.now() - requestStart);
+  trace?.({
+    status: response.status,
+    durationMs,
+    ok: response.ok,
   });
 
   // Parse response

@@ -7,7 +7,11 @@ export {
   AuthenticationError,
   GraphQLClientError,
 } from "./graphqlClient";
-export type { GraphQLError, GraphQLResponse } from "./graphqlClient";
+export type {
+  GraphQLError,
+  GraphQLResponse,
+  GraphQLTraceInfo,
+} from "./graphqlClient";
 
 export { useNetworkStatus, useSyncManager } from "./networkStatus";
 export type { NetworkStatus, SyncStatus, SyncState } from "./networkStatus";

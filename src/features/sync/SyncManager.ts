@@ -1,28 +1,63 @@
 // SyncManager - Core sync engine
 
-import { db, getDeviceId, getSyncState, updateSyncState } from "@/db";
-import { graphqlFetch, isOnline, AuthenticationError } from "@/shared/api";
+import {
+  db,
+  clearSyncData,
+  getDeviceId,
+  getStorageStats,
+  getSyncState,
+  updateSyncState,
+} from "@/db";
+import {
+  graphqlFetch,
+  isOnline,
+  AuthenticationError,
+  type GraphQLTraceInfo,
+} from "@/shared/api";
 import { auth } from "@/shared/firebase";
 import { outboxRepository } from "./outboxRepository";
 import { conflictRepository } from "./conflictRepository";
 import {
   SYNC_PUSH_MUTATION,
+  SYNC_PULL_PROBE_QUERY,
   SYNC_PULL_QUERY,
   toGraphQLEntityType,
   fromGraphQLEntityType,
   type SyncPushMutation,
   type SyncPushResponse,
+  type SyncPullProbeResponse,
   type SyncPullResponse,
   type SyncPullChange,
   type SyncEntitiesSnapshot,
 } from "./graphql";
-import type { Song, SongVersion, SectionNoteEntity } from "@/shared/types";
+import type {
+  Song,
+  SongVersion,
+  SectionNoteEntity,
+  SyncApplySummary,
+  SyncProbeState,
+} from "@/shared/types";
+import { createSyncLogger } from "./syncTrace";
 
 type SyncSource = "manual" | "auto";
+export type SyncMode = "normal" | "force_full";
+
+export interface SyncRunResult {
+  correlationId: string;
+  source: SyncSource;
+  mode: SyncMode;
+  status: "success" | "error" | "offline" | "skipped";
+  pushed: number;
+  pulled: number;
+  applySummary?: SyncApplySummary;
+  error?: string;
+}
 
 export interface SyncContext {
   source: SyncSource;
   correlationId?: string;
+  mode?: SyncMode;
+  clearLocalData?: boolean;
 }
 
 interface SyncRunContext {
@@ -30,13 +65,12 @@ interface SyncRunContext {
   source: SyncSource;
   deviceId: string;
   ownerUid: string | null;
-  log: (event: string, payload?: Record<string, unknown>) => void;
-}
-
-interface PullApplySummary {
-  upserts: number;
-  deletes: number;
-  conflicts: number;
+  mode: SyncMode;
+  log: (
+    event: string,
+    payload?: Record<string, unknown>,
+    level?: "info" | "warn" | "error",
+  ) => void;
 }
 
 function isSyncDebugEnabled(): boolean {
@@ -45,16 +79,23 @@ function isSyncDebugEnabled(): boolean {
   return localStorage.getItem("layout-debug") === "1";
 }
 
-function buildLog(
-  syncId: string,
-  source: SyncSource,
-  enabled: boolean,
-): (event: string, payload?: Record<string, unknown>) => void {
-  if (!enabled) {
-    return () => undefined;
-  }
-  return (event, payload = {}) => {
-    console.log("[SYNC]", event, { syncId, source, ...payload });
+function createEntityCountMap(): Record<"song" | "songVersion" | "sectionNote", number> {
+  return {
+    song: 0,
+    songVersion: 0,
+    sectionNote: 0,
+  };
+}
+
+function createEmptyApplySummary(): SyncApplySummary {
+  return {
+    upserts: 0,
+    deletes: 0,
+    conflicts: 0,
+    skipped: 0,
+    upsertsByEntity: createEntityCountMap(),
+    deletesByEntity: createEntityCountMap(),
+    conflictsByEntity: createEntityCountMap(),
   };
 }
 
@@ -111,44 +152,132 @@ class SyncManager {
   }
 
   // Main sync function
-  async sync(context?: SyncContext): Promise<void> {
-    // Check preconditions
-    if (!isOnline()) {
-      this.setStatus("offline", "Sem conexão com a internet");
-      return;
-    }
-
-    if (this.isSyncing) {
-      console.log("[SyncManager] Sync already in progress");
-      return;
-    }
-
-    this.isSyncing = true;
-    this.setStatus("syncing", "Sincronizando...");
-
+  async sync(context?: SyncContext): Promise<SyncRunResult> {
     const syncStart = Date.now();
     const syncId = context?.correlationId ?? crypto.randomUUID();
     const source: SyncSource = context?.source ?? "manual";
+    const mode: SyncMode = context?.mode ?? "normal";
     const debugEnabled = isSyncDebugEnabled();
-    const log = buildLog(syncId, source, debugEnabled);
+    const log = createSyncLogger({
+      correlationId: syncId,
+      source,
+      enabled: debugEnabled,
+    });
 
     const deviceId = await getDeviceId();
     const ownerUid = auth?.currentUser?.uid ?? null;
     const syncState = await getSyncState();
-    const cursor = syncState?.lastCursor ?? null;
+    const cursorBefore = syncState?.lastCursor ?? null;
     const pendingByStatus = await outboxRepository.countByStatus();
+    const onlineNow = isOnline();
 
     log("SYNC_START", {
       ownerUid,
       deviceId,
-      cursor,
+      isOnline: onlineNow,
+      cursorLocalAntes: cursorBefore,
+      mode,
       pendingByStatus,
     });
 
     await updateSyncState({
       lastSyncId: syncId,
       lastSyncSource: source,
+      lastSyncMode: mode,
+      ownerUid: ownerUid ?? syncState?.ownerUid,
     });
+
+    if (!onlineNow) {
+      this.setStatus("offline", "Sem conexão com a internet");
+      await updateSyncState({
+        lastError: "Sem conexão com a internet",
+      });
+      log(
+        "SYNC_FAIL",
+        { error: "Sem conexão com a internet" },
+        "warn",
+      );
+      log("SYNC_END", {
+        durationMs: Date.now() - syncStart,
+        error: "offline",
+      }, "warn");
+      return {
+        correlationId: syncId,
+        source,
+        mode,
+        status: "offline",
+        pushed: 0,
+        pulled: 0,
+        error: "Sem conexão com a internet",
+      };
+    }
+
+    if (this.isSyncing) {
+      log("SYNC_END", { skipped: true }, "warn");
+      return {
+        correlationId: syncId,
+        source,
+        mode,
+        status: "skipped",
+        pushed: 0,
+        pulled: 0,
+      };
+    }
+
+    this.isSyncing = true;
+    this.setStatus("syncing", "Sincronizando...");
+
+    let cursor = cursorBefore;
+    const preStats = await getStorageStats();
+
+    if (syncState?.ownerUid && ownerUid && syncState.ownerUid !== ownerUid) {
+      log("CURSOR_UPDATE", {
+        cursorAntes: cursor,
+        cursorDepois: null,
+        reason: "owner_changed",
+      });
+      await updateSyncState({ lastCursor: null, ownerUid });
+      cursor = null;
+    }
+
+    if (mode === "force_full") {
+      log("FORCE_FULL_START", {
+        clearLocalData: context?.clearLocalData ?? false,
+      });
+      if (context?.clearLocalData) {
+        const cleared = await clearSyncData({ preserveOutbox: true });
+        log("FORCE_FULL_CLEAR_OK", cleared);
+      }
+      if (cursor) {
+        log("CURSOR_UPDATE", {
+          cursorAntes: cursor,
+          cursorDepois: null,
+          reason: "force_full",
+        });
+      }
+      await updateSyncState({ lastCursor: null });
+      cursor = null;
+    }
+
+    if (
+      cursor &&
+      preStats.songsCount +
+        preStats.versionsCount +
+        preStats.notesCount ===
+        0
+    ) {
+      log("CURSOR_UPDATE", {
+        cursorAntes: cursor,
+        cursorDepois: null,
+        reason: "empty_local_data",
+      });
+      await updateSyncState({ lastCursor: null });
+      cursor = null;
+    }
+
+    let pushed = 0;
+    let pulled = 0;
+    let applySummary: SyncApplySummary | undefined;
 
     try {
       // 1. Push local changes
@@ -157,17 +286,86 @@ class SyncManager {
         source,
         deviceId,
         ownerUid,
+        mode,
         log,
+      });
+      pushed = pushResult.pushed;
+
+      // 2. Probe server state before pull
+      const probe = await this.probeSyncStatus(
+        {
+          syncId,
+          source,
+          deviceId,
+          ownerUid,
+          mode,
+          log,
+        },
+        cursor,
+      );
+
+      if (
+        probe?.serverCursor &&
+        cursor &&
+        cursor > probe.serverCursor
+      ) {
+        log("CURSOR_UPDATE", {
+          cursorAntes: cursor,
+          cursorDepois: null,
+          reason: "server_cursor_behind",
+        }, "warn");
+        await updateSyncState({ lastCursor: null });
+        cursor = null;
+      }
+
+      // 3. Pull remote changes
+      const pullResult = await this.pullChanges(
+        {
+          syncId,
+          source,
+          deviceId,
+          ownerUid,
+          mode,
+          log,
+        },
+        cursor,
+      );
+      pulled = pullResult.pulled;
+      applySummary = pullResult.applySummary;
+
+      // Verify persistence and log counts
+      const postStats = await getStorageStats();
+      await updateSyncState({
+        lastApplySummary: applySummary,
+        lastVerifyCounts: {
+          songsCount: postStats.songsCount,
+          versionsCount: postStats.versionsCount,
+          notesCount: postStats.notesCount,
+          mapItemsCount: postStats.mapItemsCount,
+        },
+      });
+      log("APPLY_VERIFY", {
+        before: preStats,
+        after: postStats,
       });
 
-      // 2. Pull remote changes
-      const pullResult = await this.pullChanges({
-        syncId,
-        source,
-        deviceId,
-        ownerUid,
-        log,
-      });
+      if (
+        applySummary.upserts > 0 &&
+        postStats.songsCount +
+          postStats.versionsCount +
+          postStats.notesCount ===
+          0
+      ) {
+        throw new Error(
+          "Pull retornou dados, mas nada foi persistido no IndexedDB",
+        );
+      }
+
+      if (probe?.changesCount && pulled === 0) {
+        throw new Error(
+          "Probe indicou mudanças no servidor, mas o pull retornou vazio",
+        );
+      }
 
       // Success - reset backoff
       this.backoffIndex = 0;
@@ -179,23 +377,41 @@ class SyncManager {
         lastError: undefined,
       });
 
-      log("APPLY_OK", pullResult?.applySummary as any);
       log("SYNC_END", {
         durationMs: Date.now() - syncStart,
-        pushed: pushResult.pushed,
-        pulled: pullResult.pulled,
+        pushed,
+        pulled,
+        applySummary,
+        error: null,
       });
 
       this.setStatus("success", "Sincronização completa");
       this.emit({
         type: "progress",
-        progress: { pushed: pushResult.pushed, pulled: pullResult.pulled },
+        progress: { pushed, pulled },
       });
+
+      return {
+        correlationId: syncId,
+        source,
+        mode,
+        status: "success",
+        pushed,
+        pulled,
+        applySummary,
+      };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
 
-      log("SYNC_FAIL", { error: errorMessage });
+      log("SYNC_FAIL", { error: errorMessage }, "error");
+      log("SYNC_END", {
+        durationMs: Date.now() - syncStart,
+        pushed,
+        pulled,
+        applySummary,
+        error: errorMessage,
+      }, "error");
       console.error("[SyncManager] Sync failed:", error);
 
       // Handle auth errors specially
@@ -206,7 +422,16 @@ class SyncManager {
           lastError: "Sessão expirada - faça login novamente",
         });
         this.emit({ type: "error", error: error as Error });
-        return;
+        return {
+          correlationId: syncId,
+          source,
+          mode,
+          status: "error",
+          pushed,
+          pulled,
+          applySummary,
+          error: "Sessão expirada - faça login novamente",
+        };
       }
 
       // Apply backoff for other errors
@@ -220,6 +445,16 @@ class SyncManager {
       await updateSyncState({ lastError: errorMessage });
       this.setStatus("error", errorMessage);
       this.emit({ type: "error", error: error as Error });
+      return {
+        correlationId: syncId,
+        source,
+        mode,
+        status: "error",
+        pushed,
+        pulled,
+        applySummary,
+        error: errorMessage,
+      };
     } finally {
       this.isSyncing = false;
     }
@@ -230,14 +465,25 @@ class SyncManager {
     pushed: number;
     serverTime?: string;
   }> {
-    const { deviceId, log } = context;
+    const { deviceId, log, syncId } = context;
     let totalPushed = 0;
     let hadPushAttempt = false;
     let lastServerTime: string | undefined;
 
     while (true) {
       const pending = await outboxRepository.getPending(50);
-      if (pending.length === 0) break;
+      if (pending.length === 0) {
+        if (!hadPushAttempt) {
+          log("REQUEST_PUSH_OK", {
+            durationMs: 0,
+            status: 0,
+            batchPushed: 0,
+            totalPushed: 0,
+            skipped: true,
+          });
+        }
+        break;
+      }
       hadPushAttempt = true;
 
       // Build mutations
@@ -250,7 +496,7 @@ class SyncManager {
         entity: item.payload,
       }));
 
-      log("PUSH_START", { batchSize: pending.length });
+      log("REQUEST_PUSH_START", { batchSize: pending.length });
 
       // Mark as SENT
       await Promise.all(
@@ -258,6 +504,8 @@ class SyncManager {
       );
 
       let response: SyncPushResponse;
+      let requestMeta: GraphQLTraceInfo | undefined;
+      const requestStart = performance.now();
       try {
         // Push to server
         response = await graphqlFetch<SyncPushResponse>(SYNC_PUSH_MUTATION, {
@@ -265,12 +513,20 @@ class SyncManager {
             deviceId,
             mutations,
           },
+        }, {
+          headers: {
+            "X-Correlation-Id": syncId,
+          },
+          trace: (info) => {
+            requestMeta = info;
+          },
         });
-
-        console.log({ response });
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Erro ao enviar mudanças";
+        const durationMs =
+          requestMeta?.durationMs ?? Math.round(performance.now() - requestStart);
+        const status = requestMeta?.status ?? 0;
 
         // Revert to PENDING on failure
         await Promise.all(
@@ -279,7 +535,11 @@ class SyncManager {
           ),
         );
 
-        log("PUSH_FAIL", { error: errorMessage });
+        log(
+          "REQUEST_PUSH_FAIL",
+          { error: errorMessage, durationMs, status },
+          "error",
+        );
         throw error;
       }
 
@@ -336,11 +596,13 @@ class SyncManager {
             ),
           ),
         );
-        log("PUSH_WARN", { missingCount: missing.length });
+        log("PUSH_WARN", { missingCount: missing.length }, "warn");
       }
 
       lastServerTime = response.syncPush.serverTime ?? lastServerTime;
-      log("PUSH_OK", {
+      log("REQUEST_PUSH_OK", {
+        durationMs: requestMeta?.durationMs ?? Math.round(performance.now() - requestStart),
+        status: requestMeta?.status ?? 0,
         batchPushed: response.syncPush.applied.filter(
           (result) => result.status === "APPLIED",
         ).length,
@@ -362,45 +624,142 @@ class SyncManager {
     return { pushed: totalPushed, serverTime: lastServerTime };
   }
 
+  private async probeSyncStatus(
+    context: SyncRunContext,
+    cursor: string | null,
+  ): Promise<SyncProbeState | undefined> {
+    const { log, syncId } = context;
+    const probeState: SyncProbeState = {
+      ranAt: new Date().toISOString(),
+    };
+
+    log("REQUEST_PROBE_START", { cursor, limit: 1, includeEntities: false });
+
+    let response: SyncPullProbeResponse;
+    let requestMeta: GraphQLTraceInfo | undefined;
+    const requestStart = performance.now();
+
+    try {
+      response = await graphqlFetch<SyncPullProbeResponse>(
+        SYNC_PULL_PROBE_QUERY,
+        {
+          input: {
+            sinceCursor: cursor,
+            limit: 1,
+            includeEntities: false,
+          },
+        },
+        {
+          headers: {
+            "X-Correlation-Id": syncId,
+          },
+          trace: (info) => {
+            requestMeta = info;
+          },
+        },
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro ao fazer probe de sync";
+      const durationMs =
+        requestMeta?.durationMs ?? Math.round(performance.now() - requestStart);
+      const status = requestMeta?.status ?? 0;
+      probeState.error = errorMessage;
+      await updateSyncState({ lastProbe: probeState });
+      log(
+        "REQUEST_PROBE_FAIL",
+        { error: errorMessage, durationMs, status },
+        "error",
+      );
+      return probeState;
+    }
+
+    const { changes, nextCursor, hasMore, serverTime } = response.syncPull;
+    const lastChangeAt = changes[changes.length - 1]?.changedAt;
+    const serverCursor = nextCursor ?? changes[changes.length - 1]?.cursorId ?? null;
+
+    const durationMs =
+      requestMeta?.durationMs ?? Math.round(performance.now() - requestStart);
+    const status = requestMeta?.status ?? 0;
+
+    const nextProbeState: SyncProbeState = {
+      ranAt: new Date().toISOString(),
+      serverTime,
+      serverCursor,
+      hasMore,
+      changesCount: changes.length,
+      lastChangeAt,
+    };
+
+    await updateSyncState({ lastProbe: nextProbeState });
+    log("REQUEST_PROBE_OK", {
+      durationMs,
+      status,
+      ...nextProbeState,
+    });
+
+    return nextProbeState;
+  }
+
   // Pull changes from server
-  private async pullChanges(context: SyncRunContext): Promise<{
+  private async pullChanges(
+    context: SyncRunContext,
+    initialCursor: string | null,
+  ): Promise<{
     pulled: number;
     serverTime?: string;
     lastCursor?: string | null;
-    applySummary: PullApplySummary;
+    applySummary: SyncApplySummary;
   }> {
-    const { log } = context;
+    const { log, syncId } = context;
     let totalPulled = 0;
     const state = await getSyncState();
-    let cursor: string | undefined | null = state?.lastCursor;
+    let cursor: string | undefined | null =
+      initialCursor !== undefined ? initialCursor : state?.lastCursor ?? null;
     let lastServerTime: string | undefined;
-    const applySummary: PullApplySummary = {
-      upserts: 0,
-      deletes: 0,
-      conflicts: 0,
-    };
+    const applySummary = createEmptyApplySummary();
 
-    if (cursor === undefined) {
+    if (cursor === undefined || cursor === null) {
       cursor = null;
       log("PULL_BOOTSTRAP", { cursor });
     }
 
-    log("PULL_START", { cursor });
-
     while (true) {
+      log("REQUEST_PULL_START", { cursor, limit: 200, includeEntities: true });
+
       let response: SyncPullResponse;
+      let requestMeta: GraphQLTraceInfo | undefined;
+      const requestStart = performance.now();
       try {
-        response = await graphqlFetch<SyncPullResponse>(SYNC_PULL_QUERY, {
-          input: {
-            sinceCursor: cursor,
-            limit: 200,
-            includeEntities: true,
+        response = await graphqlFetch<SyncPullResponse>(
+          SYNC_PULL_QUERY,
+          {
+            input: {
+              sinceCursor: cursor,
+              limit: 200,
+              includeEntities: true,
+            },
           },
-        });
+          {
+            headers: {
+              "X-Correlation-Id": syncId,
+            },
+            trace: (info) => {
+              requestMeta = info;
+            },
+          },
+        );
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Erro ao buscar mudanças";
-        log("PULL_FAIL", { error: errorMessage });
+        const durationMs =
+          requestMeta?.durationMs ?? Math.round(performance.now() - requestStart);
+        const status = requestMeta?.status ?? 0;
+        log(
+          "REQUEST_PULL_FAIL",
+          { error: errorMessage, durationMs, status },
+          "error",
+        );
         throw error;
       }
 
@@ -408,34 +767,93 @@ class SyncManager {
         response.syncPull;
       lastServerTime = serverTime ?? lastServerTime;
 
-      // Build entity lookup maps from snapshot
-      const entityMaps = this.buildEntityMaps(entities);
+      log("REQUEST_PULL_OK", {
+        durationMs:
+          requestMeta?.durationMs ?? Math.round(performance.now() - requestStart),
+        status: requestMeta?.status ?? 0,
+        changesCount: changes.length,
+        hasMore,
+        serverTime,
+        nextCursor,
+      });
 
-      // Apply changes
-      for (const change of changes) {
-        const result = await this.applyRemoteChange(change, entityMaps);
-        switch (result) {
-          case "upsert":
-            applySummary.upserts += 1;
-            break;
-          case "delete":
-            applySummary.deletes += 1;
-            break;
-          case "conflict":
-            applySummary.conflicts += 1;
-            break;
-          default:
-            break;
-        }
-        totalPulled += 1;
+      const entityMaps = this.buildEntityMaps(entities);
+      const batchSummary = createEmptyApplySummary();
+
+      log("APPLY_START", { changesCount: changes.length });
+
+      try {
+        await db.transaction(
+          "rw",
+          [db.songs, db.versions, db.sectionNotes, db.conflicts],
+          async () => {
+            for (const change of changes) {
+              const result = await this.applyRemoteChange(change, entityMaps);
+              switch (result.action) {
+                case "upsert":
+                  applySummary.upserts += 1;
+                  applySummary.upsertsByEntity[result.entityType] += 1;
+                  batchSummary.upserts += 1;
+                  batchSummary.upsertsByEntity[result.entityType] += 1;
+                  break;
+                case "delete":
+                  applySummary.deletes += 1;
+                  applySummary.deletesByEntity[result.entityType] += 1;
+                  batchSummary.deletes += 1;
+                  batchSummary.deletesByEntity[result.entityType] += 1;
+                  break;
+                case "conflict":
+                  applySummary.conflicts += 1;
+                  applySummary.conflictsByEntity[result.entityType] += 1;
+                  batchSummary.conflicts += 1;
+                  batchSummary.conflictsByEntity[result.entityType] += 1;
+                  break;
+                case "noop":
+                  applySummary.skipped += 1;
+                  batchSummary.skipped += 1;
+                  if (result.reason) {
+                    log(
+                      "APPLY_SKIP",
+                      {
+                        entityType: result.entityType,
+                        entityId: result.entityId,
+                        reason: result.reason,
+                      },
+                      "warn",
+                    );
+                  }
+                  break;
+                default:
+                  break;
+              }
+            }
+          },
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Erro ao aplicar mudanças";
+        log("APPLY_FAIL", { error: errorMessage }, "error");
+        throw error;
       }
+
+      log("APPLY_OK", {
+        changesCount: changes.length,
+        batchSummary,
+        totalSummary: applySummary,
+      });
+
+      totalPulled += changes.length;
 
       // Update cursor
       let resolvedCursor = nextCursor ?? null;
       if (!resolvedCursor && changes.length > 0) {
         resolvedCursor = changes[changes.length - 1]?.cursorId ?? null;
       }
-      if (resolvedCursor) {
+      if (resolvedCursor && resolvedCursor !== cursor) {
+        log("CURSOR_UPDATE", {
+          cursorAntes: cursor,
+          cursorDepois: resolvedCursor,
+        });
         cursor = resolvedCursor;
         await updateSyncState({ lastCursor: resolvedCursor });
       }
@@ -450,12 +868,6 @@ class SyncManager {
       pullUpdates.lastServerTime = lastServerTime;
     }
     await updateSyncState(pullUpdates);
-
-    log("PULL_OK", {
-      pulled: totalPulled,
-      nextCursor: cursor ?? null,
-      serverTime: lastServerTime,
-    });
 
     return {
       pulled: totalPulled,
@@ -502,7 +914,12 @@ class SyncManager {
       versions: Map<string, Record<string, unknown>>;
       notes: Map<string, Record<string, unknown>>;
     },
-  ): Promise<"upsert" | "delete" | "conflict" | "noop"> {
+  ): Promise<{
+    action: "upsert" | "delete" | "conflict" | "noop";
+    entityType: "song" | "songVersion" | "sectionNote";
+    entityId: string;
+    reason?: string;
+  }> {
     const entityType = fromGraphQLEntityType(change.entityType);
 
     // Get entity data from the appropriate map
@@ -533,12 +950,12 @@ class SyncManager {
         type: "conflict",
         message: `Conflito detectado em ${entityType}`,
       });
-      return "conflict";
+      return { action: "conflict", entityType, entityId: change.entityId };
     }
 
     if (change.op === "DELETE") {
       await this.deleteLocalEntity(entityType, change.entityId);
-      return "delete";
+      return { action: "delete", entityType, entityId: change.entityId };
     } else if (change.op === "UPSERT" && entityData) {
       await this.upsertLocalEntity(
         entityType,
@@ -546,10 +963,22 @@ class SyncManager {
         entityData,
         change.rev,
       );
-      return "upsert";
+      return { action: "upsert", entityType, entityId: change.entityId };
+    } else if (change.op === "UPSERT" && !entityData) {
+      return {
+        action: "noop",
+        entityType,
+        entityId: change.entityId,
+        reason: "missing_entity_snapshot",
+      };
     }
 
-    return "noop";
+    return {
+      action: "noop",
+      entityType,
+      entityId: change.entityId,
+      reason: "unsupported_change",
+    };
   }
 
   // Get local entity by type

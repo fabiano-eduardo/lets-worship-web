@@ -12,6 +12,8 @@ import { useOnlineStatus } from "@/shared/hooks/useOnlineStatus";
 import { usePWAUpdate } from "@/shared/hooks/usePWAUpdate";
 import { UserMenu } from "./UserMenu";
 import { SyncDebugPanel } from "@/features/sync/components/SyncDebugPanel";
+import { SyncTraceToast } from "@/features/sync/components/SyncTraceToast";
+import { useAutoSync } from "@/features/sync";
 
 interface LayoutProps {
   children: ReactNode;
@@ -21,6 +23,7 @@ export function Layout({ children }: LayoutProps) {
   const isOnline = useOnlineStatus();
   const { needsUpdate, updateApp } = usePWAUpdate();
   const location = useLocation();
+  useAutoSync();
 
   // Debug mode: enable via ?debug=1 in URL or localStorage
   const [debugMode, setDebugMode] = useState(false);
@@ -138,6 +141,7 @@ export function Layout({ children }: LayoutProps) {
       )}
 
       {debugMode && <SyncDebugPanel />}
+      <SyncTraceToast />
     </div>
   );
 }

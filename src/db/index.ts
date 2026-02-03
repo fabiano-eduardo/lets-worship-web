@@ -125,18 +125,26 @@ export async function getStorageStats(): Promise<{
   versionsCount: number;
   pinnedCount: number;
   notesCount: number;
+  mapItemsCount: number;
   pendingSync: number;
   conflicts: number;
 }> {
   // Use filter for boolean fields since Dexie doesn't index booleans well
-  const [allSongs, allVersions, allNotes, allConflicts, pendingSync] =
-    await Promise.all([
-      db.songs.toArray(),
-      db.versions.toArray(),
-      db.sectionNotes.toArray(),
-      db.conflicts.toArray(),
-      db.outbox.where("status").equals("PENDING").count(),
-    ]);
+  const [
+    allSongs,
+    allVersions,
+    allNotes,
+    allMapItems,
+    allConflicts,
+    pendingSync,
+  ] = await Promise.all([
+    db.songs.toArray(),
+    db.versions.toArray(),
+    db.sectionNotes.toArray(),
+    db.songMapItems.toArray(),
+    db.conflicts.toArray(),
+    db.outbox.where("status").equals("PENDING").count(),
+  ]);
 
   return {
     songsCount: allSongs.filter((s) => !s.deleted).length,
@@ -144,8 +152,69 @@ export async function getStorageStats(): Promise<{
     pinnedCount: allVersions.filter((v) => v.pinnedOffline && !v.deleted)
       .length,
     notesCount: allNotes.filter((n) => !n.deleted).length,
+    mapItemsCount: allMapItems.length,
     pendingSync,
     conflicts: allConflicts.filter((c) => !c.resolved).length,
+  };
+}
+
+export async function clearSyncData(options?: {
+  preserveOutbox?: boolean;
+}): Promise<{
+  songsCount: number;
+  versionsCount: number;
+  notesCount: number;
+  mapItemsCount: number;
+  conflictsCount: number;
+  outboxCount: number;
+}> {
+  const preserveOutbox = options?.preserveOutbox ?? true;
+
+  const [
+    songsCount,
+    versionsCount,
+    notesCount,
+    mapItemsCount,
+    conflictsCount,
+    outboxCount,
+  ] = await Promise.all([
+    db.songs.count(),
+    db.versions.count(),
+    db.sectionNotes.count(),
+    db.songMapItems.count(),
+    db.conflicts.count(),
+    db.outbox.count(),
+  ]);
+
+  const tables: Table<any, string>[] = [
+    db.songs,
+    db.versions,
+    db.sectionNotes,
+    db.songMapItems,
+    db.conflicts,
+  ];
+  if (!preserveOutbox) {
+    tables.push(db.outbox);
+  }
+
+  await db.transaction("rw", tables, async () => {
+    await db.songs.clear();
+    await db.versions.clear();
+    await db.sectionNotes.clear();
+    await db.songMapItems.clear();
+    await db.conflicts.clear();
+    if (!preserveOutbox) {
+      await db.outbox.clear();
+    }
+  });
+
+  return {
+    songsCount,
+    versionsCount,
+    notesCount,
+    mapItemsCount,
+    conflictsCount,
+    outboxCount,
   };
 }
 

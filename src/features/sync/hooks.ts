@@ -7,11 +7,16 @@ import {
   type SyncStatus,
   type SyncEvent,
 } from "./SyncManager";
+import { syncNow, type SyncMode } from "./syncNow";
+import { logSyncEvent } from "./syncTrace";
 import { useAuth } from "@/app/auth";
 import { useNetworkStatus } from "@/shared/api";
 import { AuthenticationError } from "@/shared/api";
 import { outboxRepository } from "./outboxRepository";
 import { getSyncState } from "@/db";
+import { queryKeys } from "@/app/queryClient";
+import { sectionNotesKeys } from "@/features/songs/hooks/useSectionNotes";
+import { songMapItemsKeys } from "@/features/versions/hooks/useSongMapItems";
 
 // Hook to get sync status
 export function useSyncStatus() {
@@ -78,29 +83,49 @@ export function useSyncStatus() {
 export function useSync() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
-  const { isOnline } = useNetworkStatus();
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const sync = useCallback(async (source: "manual" | "auto" = "manual") => {
-    if (!isAuthenticated || !isOnline) {
-      console.log("[useSync] Cannot sync: not authenticated or offline");
+  const sync = useCallback(async (
+    source: "manual" | "auto" = "manual",
+    mode: SyncMode = "normal",
+    clearLocalData: boolean = false,
+  ) => {
+    if (!isAuthenticated) {
+      console.log("[useSync] Cannot sync: not authenticated");
       return;
     }
 
     setIsSyncing(true);
     try {
-      await syncManager.sync({ source });
-      // Invalidate all relevant queries after sync
-      queryClient.invalidateQueries({ queryKey: ["songs"] });
-      queryClient.invalidateQueries({ queryKey: ["versions"] });
-      queryClient.invalidateQueries({ queryKey: ["sectionNotes"] });
-      queryClient.invalidateQueries({ queryKey: ["syncState"] });
+      const result = await syncNow({ source, mode, clearLocalData });
+      if (result.status === "success") {
+        // Invalidate all relevant queries after sync
+        const invalidatedKeys = [
+          queryKeys.songs.all,
+          queryKeys.versions.all,
+          sectionNotesKeys.all,
+          songMapItemsKeys.all,
+          ["syncState"],
+        ];
+
+        invalidatedKeys.forEach((queryKey) => {
+          queryClient.invalidateQueries({ queryKey });
+        });
+
+        logSyncEvent({
+          correlationId: result.correlationId,
+          source,
+          event: "UI_INVALIDATE",
+          payload: { queryKeys: invalidatedKeys },
+        });
+      }
+      return result;
     } finally {
       setIsSyncing(false);
     }
-  }, [queryClient, isAuthenticated, isOnline]);
+  }, [queryClient, isAuthenticated]);
 
-  const canSync = isAuthenticated && isOnline && !isSyncing;
+  const canSync = isAuthenticated && !isSyncing;
 
   return { sync, isSyncing, canSync };
 }
@@ -122,7 +147,7 @@ export function useAutoSync() {
   // Sync on visibility change (coming back to foreground)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && canSync) {
+      if (document.visibilityState === "visible" && canSync && isOnline) {
         console.log("[useAutoSync] Visibility changed to visible, syncing...");
         sync("auto");
       }
@@ -135,7 +160,7 @@ export function useAutoSync() {
 
   // Initial sync on mount
   useEffect(() => {
-    if (canSync) {
+    if (canSync && isOnline) {
       sync("auto");
     }
     // Only on mount

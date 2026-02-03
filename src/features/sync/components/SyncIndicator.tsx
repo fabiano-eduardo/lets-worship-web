@@ -68,7 +68,7 @@ export function SyncIndicator({ compact = false }: SyncIndicatorProps) {
   if (compact) {
     return (
       <button
-        onClick={() => canSync && sync()}
+        onClick={() => sync()}
         disabled={!canSync}
         className={`p-2 rounded-lg transition-colors ${getStatusColor()} ${
           canSync ? "hover:bg-slate-700" : "cursor-not-allowed opacity-50"
@@ -82,7 +82,7 @@ export function SyncIndicator({ compact = false }: SyncIndicatorProps) {
 
   return (
     <button
-      onClick={() => canSync && sync()}
+      onClick={() => sync()}
       disabled={!canSync}
       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${getStatusColor()} ${
         canSync ? "hover:bg-slate-700" : "cursor-not-allowed"

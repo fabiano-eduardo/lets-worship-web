@@ -243,16 +243,46 @@ export interface OutboxItem {
   errorMessage?: string;
 }
 
+export interface SyncApplySummary {
+  upserts: number;
+  deletes: number;
+  conflicts: number;
+  skipped: number;
+  upsertsByEntity: Record<EntityType, number>;
+  deletesByEntity: Record<EntityType, number>;
+  conflictsByEntity: Record<EntityType, number>;
+}
+
+export interface SyncProbeState {
+  ranAt?: string;
+  serverTime?: string;
+  serverCursor?: string | null;
+  hasMore?: boolean;
+  changesCount?: number;
+  lastChangeAt?: string;
+  error?: string;
+}
+
 export interface SyncState {
   id: string; // "main"
-  lastCursor?: string;
+  lastCursor?: string | null;
   lastSyncAt?: string;
   lastError?: string;
   lastPushAt?: string;
   lastPullAt?: string;
   lastSyncId?: string;
   lastSyncSource?: "manual" | "auto";
+  lastSyncMode?: "normal" | "force_full";
   lastServerTime?: string;
+  ownerUid?: string;
+  lastProbe?: SyncProbeState;
+  lastApplySummary?: SyncApplySummary;
+  lastVerifyCounts?: {
+    songsCount: number;
+    versionsCount: number;
+    notesCount: number;
+    mapItemsCount: number;
+  };
   deviceId: string;
 }
 
