@@ -8,16 +8,20 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.chord-display .chord-line {
+  margin-bottom: var(--space-4);
+}
+
+.chord-display .chord-line:last-child {
+  margin-bottom: 4px !important;
+}
+
 .chord-display--large {
   font-size: var(--text-lg);
 }
 
 .chord-display--xlarge {
   font-size: var(--text-xl);
-}
-
-.chord-line {
-  margin-bottom: var(--space-4);
 }
 
 .chord-line__chords {

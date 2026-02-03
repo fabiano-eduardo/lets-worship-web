@@ -111,12 +111,11 @@ export const SYNC_PULL_QUERY = `
 // Types for sync operations
 export interface SyncPushMutation {
   mutationId: string;
-  deviceId: string;
   entityType: "SONG" | "SONG_VERSION" | "SECTION_NOTE";
   op: "UPSERT" | "DELETE";
   entityId: string;
   baseRev?: number;
-  payload?: Record<string, unknown>;
+  entity?: Record<string, unknown>;
 }
 
 export interface SyncPushResult {

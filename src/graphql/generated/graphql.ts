@@ -78,6 +78,7 @@ export type CreateSectionNoteInput = {
   anchor: AnchorInput;
   /** Optional client-provided ID for sync */
   id?: InputMaybe<Scalars["String"]["input"]>;
+  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
   sectionId: Scalars["String"]["input"];
   text: Scalars["String"]["input"];
   versionId: Scalars["String"]["input"];
@@ -115,7 +116,11 @@ export type EmbeddedSectionNoteInput = {
   text: Scalars["String"]["input"];
 };
 
-export type EntityType = "SECTION_NOTE" | "SONG" | "SONG_VERSION";
+export type EntityType =
+  | "SECTION_NOTE"
+  | "SONG"
+  | "SONG_MAP_ITEM"
+  | "SONG_VERSION";
 
 export type HealthStatus = {
   serverTime: Scalars["String"]["output"];
@@ -138,7 +143,7 @@ export type KeySignatureInput = {
 };
 
 /** Type of musical key signature */
-export type KeyType = "MODAL" | "TONAL";
+export type KeyType = "modal" | "tonal";
 
 /** Type of note anchor (legacy) */
 export type LegacyAnchorType = "LINE" | "RANGE" | "WORD";
@@ -207,8 +212,12 @@ export type Mutation = {
   deleteSectionNote: Scalars["Boolean"]["output"];
   /** Delete a song (soft delete) */
   deleteSong: Song;
+  /** Delete a song map item (soft delete) */
+  deleteSongMapItem: Scalars["Boolean"]["output"];
   /** Delete a song version (soft delete) */
   deleteSongVersion: SongVersion;
+  /** Reorder map items for a song version */
+  reorderSongMapItems: Array<SongMapItem>;
   /** Push client mutations to the server. Returns status for each mutation. */
   syncPush: SyncPushResult;
   /** Update current user preferences */
@@ -219,6 +228,8 @@ export type Mutation = {
   updateSong: Song;
   /** Update an existing song version */
   updateSongVersion: SongVersion;
+  /** Upsert a song map item */
+  upsertSongMapItem: SongMapItem;
 };
 
 export type MutationCreateSectionNoteArgs = {
@@ -243,9 +254,18 @@ export type MutationDeleteSongArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationDeleteSongMapItemArgs = {
+  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteSongVersionArgs = {
   baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
+};
+
+export type MutationReorderSongMapItemsArgs = {
+  input: ReorderSongMapItemsInput;
 };
 
 export type MutationSyncPushArgs = {
@@ -271,6 +291,10 @@ export type MutationUpdateSongArgs = {
 export type MutationUpdateSongVersionArgs = {
   id: Scalars["ID"]["input"];
   input: UpdateSongVersionInput;
+};
+
+export type MutationUpsertSongMapItemArgs = {
+  input: UpsertSongMapItemInput;
 };
 
 export type MutationResult = {
@@ -302,6 +326,8 @@ export type Query = {
   sectionNotesBySection: Array<SectionNote>;
   /** Get a song by ID */
   song?: Maybe<Song>;
+  /** Get a song map item by ID */
+  songMapItem?: Maybe<SongMapItem>;
   /** Get a song version by ID */
   songVersion?: Maybe<SongVersion>;
   /** Get all versions of a song */
@@ -322,6 +348,7 @@ export type QuerySectionNoteArgs = {
 };
 
 export type QuerySectionNotesArgs = {
+  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
   versionId: Scalars["ID"]["input"];
 };
 
@@ -331,6 +358,10 @@ export type QuerySectionNotesBySectionArgs = {
 };
 
 export type QuerySongArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QuerySongMapItemArgs = {
   id: Scalars["ID"]["input"];
 };
 
@@ -364,6 +395,11 @@ export type ReferenceInput = {
   youtubeUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type ReorderSongMapItemsInput = {
+  orderedIds: Array<Scalars["ID"]["input"]>;
+  songVersionId: Scalars["ID"]["input"];
+};
+
 export type SectionBlock = {
   chordProText: Scalars["String"]["output"];
   id: Scalars["String"]["output"];
@@ -383,6 +419,7 @@ export type SectionNote = {
   createdAt: Scalars["String"]["output"];
   deletedAt?: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
+  occurrenceId?: Maybe<Scalars["ID"]["output"]>;
   ownerUid: Scalars["String"]["output"];
   rev: Scalars["Int"]["output"];
   schemaVersion: Scalars["Int"]["output"];
@@ -420,12 +457,27 @@ export type Song = {
   updatedAt: Scalars["String"]["output"];
 };
 
+export type SongMapItem = {
+  createdAt: Scalars["String"]["output"];
+  deletedAt?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  labelOverride?: Maybe<Scalars["String"]["output"]>;
+  order: Scalars["Int"]["output"];
+  ownerUid: Scalars["String"]["output"];
+  rev: Scalars["Int"]["output"];
+  schemaVersion: Scalars["Int"]["output"];
+  sectionId: Scalars["String"]["output"];
+  songVersionId: Scalars["String"]["output"];
+  updatedAt: Scalars["String"]["output"];
+};
+
 export type SongVersion = {
   arrangement?: Maybe<Arrangement>;
   createdAt: Scalars["String"]["output"];
   deletedAt?: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
   label: Scalars["String"]["output"];
+  mapItems: Array<SongMapItem>;
   musicalMeta?: Maybe<MusicalMeta>;
   ownerUid: Scalars["String"]["output"];
   reference?: Maybe<Reference>;
@@ -442,6 +494,7 @@ export type SongsResult = {
 };
 
 export type SyncEntitiesSnapshot = {
+  mapItems?: Maybe<Array<SongMapItem>>;
   notes?: Maybe<Array<SectionNote>>;
   songs?: Maybe<Array<Song>>;
   versions?: Maybe<Array<SongVersion>>;
@@ -509,6 +562,7 @@ export type TonalQuality = "MAJOR" | "MINOR";
 
 export type UpdateSectionNoteInput = {
   anchor?: InputMaybe<AnchorInput>;
+  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;
 };
 
@@ -533,6 +587,17 @@ export type UpdateSongVersionInput = {
 
 export type UpdateUserPreferencesInput = {
   defaultMapView?: InputMaybe<MapViewPreferencesInput>;
+};
+
+export type UpsertSongMapItemInput = {
+  /** Base revision for conflict detection */
+  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
+  /** Optional client-provided ID for sync */
+  id?: InputMaybe<Scalars["String"]["input"]>;
+  labelOverride?: InputMaybe<Scalars["String"]["input"]>;
+  order: Scalars["Int"]["input"];
+  sectionId: Scalars["String"]["input"];
+  songVersionId: Scalars["String"]["input"];
 };
 
 export type UserPreferences = {

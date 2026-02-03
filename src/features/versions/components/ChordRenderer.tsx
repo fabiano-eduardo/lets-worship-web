@@ -86,6 +86,7 @@ interface SectionDisplayProps {
   fontSize?: "normal" | "large" | "xlarge";
   showLyrics?: boolean;
   showChords?: boolean;
+  showSectionName?: boolean;
 }
 
 export function SectionDisplay({
@@ -97,11 +98,17 @@ export function SectionDisplay({
   fontSize = "normal",
   showLyrics = true,
   showChords = true,
+  showSectionName = true,
 }: SectionDisplayProps) {
   return (
     <div className="section-display">
       <div className="section-display__header">
-        <span className="section-display__name">{name}</span>
+        {showSectionName === false ? (
+          <></>
+        ) : (
+          <span className="section-display__name">{name}</span>
+        )}
+
         {notes.length > 0 && (
           <div className="section-display__notes">
             {notes.map((note, i) => (

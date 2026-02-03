@@ -193,6 +193,8 @@ export function SectionEditor({
     return sections.find((s) => s.id === sectionId)?.name || "Unknown";
   };
 
+  const sequenceGroups = groupMapItems(sortMapItems(mapItems), sections);
+
   return (
     <div className="flex flex-col gap-6">
       {/* Sections list */}
@@ -294,8 +296,7 @@ export function SectionEditor({
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {groupMapItems(sortMapItems(mapItems), sections).map(
-              (group, index) => (
+            {sequenceGroups.map((group, index) => (
               <div key={index} className="card p-3 flex items-center gap-3">
                 <div className="flex flex-col gap-1">
                   <Button
@@ -312,7 +313,7 @@ export function SectionEditor({
                     size="sm"
                     isIcon
                     onClick={() => handleMoveSequenceItem(index, "down")}
-                    disabled={index === sequence.length - 1}
+                    disabled={index === sequenceGroups.length - 1}
                   >
                     <IconChevronDown size={14} />
                   </Button>
@@ -346,8 +347,7 @@ export function SectionEditor({
                   <IconTrash size={14} />
                 </Button>
               </div>
-            ),
-            )}
+            ))}
           </div>
         )}
       </div>

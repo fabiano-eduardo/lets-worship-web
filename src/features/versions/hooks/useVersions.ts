@@ -22,7 +22,13 @@ export function useVersions(songId: string) {
 export function useVersion(id: string) {
   return useQuery({
     queryKey: queryKeys.versions.detail(id),
-    queryFn: () => versionRepository.getById(id),
+    queryFn: async () => {
+      const a = await versionRepository.getById(id);
+
+      console.log({ a });
+
+      return a;
+    },
     enabled: !!id,
   });
 }

@@ -113,6 +113,7 @@ export function VersionDetailPage() {
   const [showLyrics, setShowLyrics] = useState(true);
   const [showChords, setShowChords] = useState(true);
   const [showNotes, setShowNotes] = useState(true);
+  const [showSectionName, setShowSectionName] = useState(true);
 
   // Edit state
   const [editLabel, setEditLabel] = useState("");
@@ -207,6 +208,21 @@ export function VersionDetailPage() {
         .catch(() => {});
     }
   }, [version?.id, mapItemsLoading, mapItemsData, hasArrangementChanges]);
+
+  // Build sequence display data (grouped for UI)
+  const sequenceDisplayData = useMemo(() => {
+    const groups = groupMapItems(mapItems, sections);
+    return groups.map((group) => ({
+      sectionId: group.sectionId,
+      sectionName: group.labelOverride || group.sectionName || "Unknown",
+      repeat: group.items.length,
+    }));
+  }, [mapItems, sections]);
+
+  const executionSteps = useMemo(
+    () => buildExecutionPlan(sections, mapItems),
+    [sections, mapItems],
+  );
 
   // Loading states
   if (songLoading || versionLoading) {
@@ -325,21 +341,6 @@ export function VersionDetailPage() {
   const originalKey = version.musicalMeta.originalKey;
   const effectiveTargetKey = targetKey || originalKey?.root || null;
 
-  // Build sequence display data (grouped for UI)
-  const sequenceDisplayData = useMemo(() => {
-    const groups = groupMapItems(mapItems, sections);
-    return groups.map((group) => ({
-      sectionId: group.sectionId,
-      sectionName: group.labelOverride || group.sectionName || "Unknown",
-      repeat: group.items.length,
-    }));
-  }, [mapItems, sections]);
-
-  const executionSteps = useMemo(
-    () => buildExecutionPlan(sections, mapItems),
-    [sections, mapItems],
-  );
-
   // Performance mode
   if (viewMode === "performance") {
     return (
@@ -381,6 +382,15 @@ export function VersionDetailPage() {
             {showNotes ? <IconEye size={14} /> : <IconEyeOff size={14} />}
             Notas
           </Button>
+
+          <Button
+            variant={showSectionName ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setShowSectionName(!showSectionName)}
+          >
+            {showSectionName ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            Seções
+          </Button>
         </div>
 
         {originalKey && (
@@ -404,11 +414,7 @@ export function VersionDetailPage() {
               <div key={step.id}>
                 {/* Start notes */}
                 {showNotes && (
-                  <SectionNotesDisplay
-                    notes={stepNotes}
-                    filter="start"
-                    compact
-                  />
+                  <SectionNotesDisplay notes={stepNotes} filter="start" />
                 )}
                 <SectionDisplay
                   name={step.displayName}
@@ -419,6 +425,7 @@ export function VersionDetailPage() {
                   fontSize="xlarge"
                   showLyrics={showLyrics}
                   showChords={showChords}
+                  showSectionName={showSectionName}
                 />
                 {/* General and end notes */}
                 {showNotes && (

@@ -151,12 +151,11 @@ class SyncManager {
       // Build mutations
       const mutations: SyncPushMutation[] = pending.map((item) => ({
         mutationId: item.id,
-        deviceId,
         entityType: toGraphQLEntityType(item.entityType),
         op: item.op,
         entityId: item.entityId,
         baseRev: item.baseRev,
-        payload: item.payload,
+        entity: item.payload,
       }));
 
       // Mark as SENT
@@ -168,7 +167,10 @@ class SyncManager {
       const response = await graphqlFetch<SyncPushResponse>(
         SYNC_PUSH_MUTATION,
         {
-          input: { mutations },
+          input: {
+            deviceId,
+            mutations,
+          },
         },
       );
 
