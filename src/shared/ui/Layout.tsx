@@ -41,6 +41,18 @@ export function Layout({ children }: LayoutProps) {
   // Don't show navigation on login page
   const isLoginPage = location.pathname === "/login";
 
+  // Presentation mode: hide bottom navigation when URL contains ?mode=presentation
+  const isPresentationMode = (() => {
+    try {
+      const params = new URLSearchParams(
+        location.search || window.location.search,
+      );
+      return params.get("mode") === "presentation";
+    } catch (e) {
+      return false;
+    }
+  })();
+
   // Login page has its own full-screen layout
   if (isLoginPage) {
     return <>{children}</>;
@@ -95,28 +107,30 @@ export function Layout({ children }: LayoutProps) {
       </main>
 
       {/* Bottom navigation - grid row 3 */}
-      <nav className="app-nav">
-        <Link
-          to="/songs"
-          className="app-nav__item"
-          activeProps={{
-            className: "app-nav__item app-nav__item--active",
-          }}
-        >
-          <IconMusic size={24} />
-          <span>Músicas</span>
-        </Link>
-        <Link
-          to="/settings"
-          className="app-nav__item"
-          activeProps={{
-            className: "app-nav__item app-nav__item--active",
-          }}
-        >
-          <IconSettings size={24} />
-          <span>Config</span>
-        </Link>
-      </nav>
+      {!isPresentationMode && (
+        <nav className="app-nav">
+          <Link
+            to="/songs"
+            className="app-nav__item"
+            activeProps={{
+              className: "app-nav__item app-nav__item--active",
+            }}
+          >
+            <IconMusic size={24} />
+            <span>Músicas</span>
+          </Link>
+          <Link
+            to="/settings"
+            className="app-nav__item"
+            activeProps={{
+              className: "app-nav__item app-nav__item--active",
+            }}
+          >
+            <IconSettings size={24} />
+            <span>Config</span>
+          </Link>
+        </nav>
+      )}
 
       {/* PWA update banner */}
       {needsUpdate && (

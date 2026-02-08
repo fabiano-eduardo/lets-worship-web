@@ -1,7 +1,14 @@
 // Version detail/editor page
 
-import { useState, useMemo, useEffect } from "react";
-import { useParams, useNavigate } from "@tanstack/react-router";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type RefObject,
+} from "react";
+import { useParams, useNavigate, useLocation } from "@tanstack/react-router";
 import { useSong } from "@/features/songs/hooks/useSongs";
 import { useSectionNotes } from "@/features/songs/hooks/useSectionNotes";
 import {
@@ -30,11 +37,13 @@ import {
   IconPinOff,
   IconMaximize,
   IconMinimize,
+  IconSettings,
   IconYoutube,
   IconSpotify,
   IconExternalLink,
   IconEye,
   IconEyeOff,
+  IconX,
 } from "@/shared/ui";
 import { SectionDisplay, SequenceDisplay } from "../components/ChordRenderer";
 import { TransposeControls } from "../components/TransposeControls";
@@ -92,6 +101,7 @@ export function VersionDetailPage() {
     from: "/songs/$songId/versions/$versionId",
   });
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
 
   const { data: song, isLoading: songLoading } = useSong(songId);
@@ -105,9 +115,14 @@ export function VersionDetailPage() {
   const replaceSongMapItems = useReplaceSongMapItems();
 
   const [viewMode, setViewMode] = useState<ViewMode>("view");
+  // Presentation scale state (percent integers)
+  const [lyricsScale, setLyricsScale] = useState<number>(100);
+  const [notesScale, setNotesScale] = useState<number>(100);
   const [targetKey, setTargetKey] = useState<NoteName | null>(null);
   const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsButtonRef = useRef<HTMLSpanElement>(null);
 
   // Visibility preferences
   const [showLyrics, setShowLyrics] = useState(true);
@@ -182,6 +197,34 @@ export function VersionDetailPage() {
     setHasArrangementChanges(false);
   }, [version?.id]);
 
+  // Load persisted presentation scales and handle ?mode=presentation
+  useEffect(() => {
+    const l = localStorage.getItem("presentation.lyricsScale");
+    const n = localStorage.getItem("presentation.notesScale");
+    if (l) setLyricsScale(Math.max(75, Math.min(140, Number(l))));
+    if (n) setNotesScale(Math.max(70, Math.min(150, Number(n))));
+
+    try {
+      const params = new URLSearchParams(
+        location.search || window.location.search,
+      );
+      if (params.get("mode") === "presentation") {
+        setViewMode("performance");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // Persist scales when changed
+  useEffect(() => {
+    localStorage.setItem("presentation.lyricsScale", String(lyricsScale));
+  }, [lyricsScale]);
+
+  useEffect(() => {
+    localStorage.setItem("presentation.notesScale", String(notesScale));
+  }, [notesScale]);
+
   useEffect(() => {
     if (!version || mapItemsLoading || hasArrangementChanges) return;
     const initial =
@@ -223,6 +266,18 @@ export function VersionDetailPage() {
     () => buildExecutionPlan(sections, mapItems),
     [sections, mapItems],
   );
+
+  const presentationStyle = useMemo(() => {
+    const lyricsPx = Math.round((18 * lyricsScale) / 100);
+    const chordsPx = Math.round((16 * lyricsScale) / 100);
+    const notesPx = Math.round((14 * notesScale) / 100);
+
+    return {
+      "--presentation-lyrics-font-size": `${lyricsPx}px`,
+      "--presentation-chords-font-size": `${chordsPx}px`,
+      "--presentation-notes-font-size": `${notesPx}px`,
+    } as CSSProperties;
+  }, [lyricsScale, notesScale]);
 
   // Loading states
   if (songLoading || versionLoading) {
@@ -344,16 +399,45 @@ export function VersionDetailPage() {
   // Performance mode
   if (viewMode === "performance") {
     return (
-      <div className="performance-mode">
+      <div className="performance-mode" style={presentationStyle}>
         <div className="flex items-center justify-between mb-4 px-4">
           <div>
-            <h1 className="text-xl font-bold">{song.title}</h1>
-            <p className="text-secondary">{version.label}</p>
+            <h1
+              style={{
+                color: "white",
+              }}
+              className="text-xl font-bold performance-mode__title"
+            >
+              {song.title}
+            </h1>
+            <p className="performance-mode__subtitle">{version.label}</p>
           </div>
-          <Button variant="ghost" onClick={() => setViewMode("view")}>
-            <IconMinimize size={20} />
-            Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            <span ref={settingsButtonRef}>
+              <Button
+                variant="ghost"
+                size="sm"
+                isIcon
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                aria-label="Ajustes de apresentação"
+              >
+                <IconSettings size={20} />
+              </Button>
+            </span>
+
+            <Button
+              variant="ghost"
+              onClick={() => {
+                // exit presentation mode => navigate back to non-query URL
+                setViewMode("view");
+                setIsSettingsOpen(false);
+                navigate({ to: `/songs/${songId}/versions/${versionId}` });
+              }}
+            >
+              <IconMinimize size={20} />
+              Sair
+            </Button>
+          </div>
         </div>
 
         {/* Visibility toggles in performance mode */}
@@ -402,6 +486,20 @@ export function VersionDetailPage() {
             />
           </div>
         )}
+
+        <PresentationSettingsPanel
+          isOpen={isSettingsOpen}
+          anchorRef={settingsButtonRef}
+          lyricsScale={lyricsScale}
+          notesScale={notesScale}
+          onClose={() => setIsSettingsOpen(false)}
+          onLyricsChange={(value) => setLyricsScale(value)}
+          onNotesChange={(value) => setNotesScale(value)}
+          onReset={() => {
+            setLyricsScale(100);
+            setNotesScale(100);
+          }}
+        />
 
         <SequenceDisplay sequence={sequenceDisplayData} />
 
@@ -589,7 +687,13 @@ export function VersionDetailPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setViewMode("performance")}
+            onClick={() => {
+              // enter presentation via query param so Layout can hide bottom-nav
+              setViewMode("performance");
+              navigate({
+                to: `/songs/${songId}/versions/${versionId}?mode=presentation`,
+              });
+            }}
           >
             <IconMaximize size={16} />
             Modo apresentação
@@ -790,4 +894,244 @@ export function VersionDetailPage() {
       />
     </>
   );
+}
+
+const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
+
+type PresentationSettingsPanelProps = {
+  isOpen: boolean;
+  anchorRef: RefObject<HTMLElement>;
+  lyricsScale: number;
+  notesScale: number;
+  onClose: () => void;
+  onLyricsChange: (value: number) => void;
+  onNotesChange: (value: number) => void;
+  onReset: () => void;
+};
+
+type PanelPosition = {
+  top: number;
+  left: number;
+  width: number;
+};
+
+function PresentationSettingsPanel({
+  isOpen,
+  anchorRef,
+  lyricsScale,
+  notesScale,
+  onLyricsChange,
+  onNotesChange,
+  onReset,
+  onClose,
+}: PresentationSettingsPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
+  const [position, setPosition] = useState<PanelPosition | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !isDesktop || !anchorRef.current) {
+      setPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const width = Math.min(360, window.innerWidth - 32, 320);
+      const left = Math.min(
+        Math.max(rect.right - width, 16),
+        window.innerWidth - width - 16,
+      );
+      const top = rect.bottom + 8;
+
+      setPosition({ top, left, width });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen, isDesktop, anchorRef]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" || event.key === "Esc") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const firstControl =
+      panelRef.current?.querySelector<HTMLElement>("button, input");
+    firstControl?.focus();
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const panelStyle: CSSProperties = isDesktop
+    ? {
+        position: "fixed",
+        top: position?.top ?? 72,
+        left: position?.left ?? 16,
+        width: position?.width ?? 320,
+      }
+    : {
+        position: "fixed",
+        inset: "auto 0 0 0",
+        width: "100%",
+        borderRadius: "16px 16px 0 0",
+      };
+
+  return (
+    <>
+      <div
+        className={`presentation-settings-backdrop ${isDesktop ? "presentation-settings-backdrop--desktop" : "presentation-settings-backdrop--mobile"}`}
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-label="Ajustes de apresentação"
+        className={`presentation-settings-panel ${isDesktop ? "presentation-settings-panel--desktop" : "presentation-settings-panel--mobile"}`}
+        style={panelStyle}
+      >
+        <header className="presentation-settings-panel__header">
+          <div>
+            <p className="presentation-settings-panel__title">
+              Ajustes de apresentação
+            </p>
+            <p className="presentation-settings-panel__subtitle">
+              Ajuste o tamanho para seu celular
+            </p>
+          </div>
+          <button
+            type="button"
+            className="presentation-settings-panel__close"
+            aria-label="Fechar ajustes"
+            onClick={onClose}
+          >
+            <IconX size={20} />
+          </button>
+        </header>
+
+        <section className="presentation-settings-panel__section">
+          <div className="presentation-settings-panel__section-header">
+            <span>Texto (letra + cifra)</span>
+            <span className="presentation-settings-panel__badge">
+              {lyricsScale}%
+            </span>
+          </div>
+          <div className="presentation-settings-panel__controls">
+            <button
+              type="button"
+              className="presentation-settings-panel__control-button"
+              aria-label="Diminuir texto"
+              onClick={() => onLyricsChange(Math.max(75, lyricsScale - 5))}
+            >
+              A−
+            </button>
+            <input
+              type="range"
+              min={75}
+              max={140}
+              step={5}
+              value={lyricsScale}
+              onChange={(event) => onLyricsChange(Number(event.target.value))}
+              className="presentation-settings-panel__slider"
+              aria-label="Escala do texto"
+            />
+            <button
+              type="button"
+              className="presentation-settings-panel__control-button"
+              aria-label="Aumentar texto"
+              onClick={() => onLyricsChange(Math.min(140, lyricsScale + 5))}
+            >
+              A+
+            </button>
+          </div>
+          <p className="presentation-settings-panel__caption">
+            Passo: 5% · 75–140%
+          </p>
+        </section>
+
+        <section className="presentation-settings-panel__section">
+          <div className="presentation-settings-panel__section-header">
+            <span>Notas / Observações</span>
+            <span className="presentation-settings-panel__badge">
+              {notesScale}%
+            </span>
+          </div>
+          <div className="presentation-settings-panel__controls">
+            <button
+              type="button"
+              className="presentation-settings-panel__control-button"
+              aria-label="Diminuir notas"
+              onClick={() => onNotesChange(Math.max(70, notesScale - 5))}
+            >
+              A−
+            </button>
+            <input
+              type="range"
+              min={70}
+              max={150}
+              step={5}
+              value={notesScale}
+              onChange={(event) => onNotesChange(Number(event.target.value))}
+              className="presentation-settings-panel__slider"
+              aria-label="Escala das notas"
+            />
+            <button
+              type="button"
+              className="presentation-settings-panel__control-button"
+              aria-label="Aumentar notas"
+              onClick={() => onNotesChange(Math.min(150, notesScale + 5))}
+            >
+              A+
+            </button>
+          </div>
+          <p className="presentation-settings-panel__caption">
+            Passo: 5% · 70–150%
+          </p>
+        </section>
+
+        <footer className="presentation-settings-panel__footer">
+          <button
+            type="button"
+            className="presentation-settings-panel__reset"
+            onClick={onReset}
+          >
+            Resetar
+          </button>
+          <span className="presentation-settings-panel__footer-note">
+            Padrão: 100%
+          </span>
+        </footer>
+      </div>
+    </>
+  );
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia(query);
+    const update = () => setMatches(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, [query]);
+
+  return matches;
 }

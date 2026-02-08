@@ -123,14 +123,22 @@
 }
 
 /* Performance mode */
+
 .performance-mode {
   background-color: #000;
   padding: var(--space-6) var(--space-4);
   min-height: 100dvh;
+  color: var(--color-text-inverse);
 }
 
+/* Presentation font-size tokens (can be set inline on the .performance-mode container)
+   --presentation-lyrics-font-size: px
+   --presentation-chords-font-size: px
+   --presentation-notes-font-size: px
+*/
 .performance-mode .chord-display {
-  font-size: var(--text-xl);
+  /* lyrics base size — falls back to a large text token */
+  font-size: var(--presentation-lyrics-font-size, var(--text-xl));
 }
 
 .performance-mode .chord-line {
@@ -141,6 +149,32 @@
   font-size: var(--text-base);
   height: 36px;
   min-width: 48px;
+}
+
+.performance-mode__title {
+  color: var(--color-text-inverse);
+}
+
+.performance-mode__subtitle {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Chord and lyric lines: allow explicit control per layer */
+.performance-mode .chord-line__chords {
+  font-size: var(--presentation-chords-font-size, 1em);
+}
+
+.performance-mode .chord-line__lyrics {
+  font-size: var(--presentation-lyrics-font-size, 1em);
+}
+
+/* Notes / Observations sizing in presentation */
+.performance-mode .section-note {
+  font-size: var(--presentation-notes-font-size, var(--text-xs));
+}
+
+.performance-mode .section-note-text {
+  font-size: var(--presentation-notes-font-size, var(--text-xs));
 }
 
 /* Chord editor */

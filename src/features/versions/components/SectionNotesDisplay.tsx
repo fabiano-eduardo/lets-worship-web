@@ -36,11 +36,11 @@ export function SectionNotesDisplay({
 
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="section-notes compact flex flex-wrap gap-2">
         {filteredNotes.map((note) => (
           <span
             key={note.id}
-            className="inline-flex items-center px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-100/80 border border-yellow-500/20"
+            className="section-note compact inline-flex items-center px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-100/80 border border-yellow-500/20"
             title={note.text}
           >
             {note.text.length > 30
@@ -53,13 +53,15 @@ export function SectionNotesDisplay({
   }
 
   return (
-    <div className="flex flex-col gap-1 mt-2 mb-2">
+    <div className="section-notes flex flex-col gap-1 mt-2 mb-2">
       {filteredNotes.map((note) => (
         <div
           key={note.id}
-          className="px-3 py-2 rounded-lg bg-yellow-500/5 border-l-2 border-yellow-500/40"
+          className="section-note px-3 py-2 rounded-lg bg-yellow-500/5 border-l-2 border-yellow-500/40"
         >
-          <span className="text-sm text-yellow-100/80">{note.text}</span>
+          <span className="section-note-text text-sm text-yellow-100/80">
+            {note.text}
+          </span>
         </div>
       ))}
     </div>
