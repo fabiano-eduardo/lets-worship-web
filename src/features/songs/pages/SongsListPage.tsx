@@ -48,6 +48,7 @@ export function SongsListPage() {
   }
 
   if (error) {
+    console.log(error);
     return (
       <div className="page">
         <PageHeader title="Músicas" />

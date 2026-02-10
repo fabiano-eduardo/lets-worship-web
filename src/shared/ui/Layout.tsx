@@ -11,8 +11,6 @@ import {
 import { useOnlineStatus } from "@/shared/hooks/useOnlineStatus";
 import { usePWAUpdate } from "@/shared/hooks/usePWAUpdate";
 import { UserMenu } from "./UserMenu";
-import { SyncDebugPanel } from "@/features/sync/components/SyncDebugPanel";
-import { SyncTraceToast } from "@/features/sync/components/SyncTraceToast";
 
 interface LayoutProps {
   children: ReactNode;
@@ -151,9 +149,6 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
       )}
-
-      {debugMode && <SyncDebugPanel />}
-      <SyncTraceToast />
     </div>
   );
 }

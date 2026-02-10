@@ -1,103 +1,226 @@
-// Section Notes hooks
+// Section Notes hooks — Online-first via GraphQL
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { sectionNotesRepository } from "../repositories/sectionNotesRepository";
-import type { SectionNoteAnchor } from "@/shared/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGraphQLQuery, useGraphQLMutation } from "@/graphql/hooks";
+import { queryKeys } from "@/app/queryClient";
+import {
+  SectionNotesDocument,
+  SectionNotesBySectionDocument,
+  CreateSectionNoteDocument,
+  UpdateSectionNoteDocument,
+  DeleteSectionNoteDocument,
+} from "@/graphql/generated/graphql";
+import type {
+  SectionNotesQuery,
+  AnchorType,
+} from "@/graphql/generated/graphql";
+import type { SectionNoteAnchor, SectionNoteEntity } from "@/shared/types";
 
-// Query keys for section notes
-export const sectionNotesKeys = {
-  all: ["sectionNotes"] as const,
-  byVersion: (versionId: string) =>
-    ["sectionNotes", "byVersion", versionId] as const,
-  bySection: (versionId: string, sectionId: string) =>
-    ["sectionNotes", "bySection", versionId, sectionId] as const,
-  detail: (id: string) => ["sectionNotes", "detail", id] as const,
-};
+// ---------------------------------------------------------------------------
+// Derived type from codegen
+// ---------------------------------------------------------------------------
+export type SectionNoteFromServer = SectionNotesQuery["sectionNotes"][number];
 
-// Get all notes for a version
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
+/** Get all notes for a version */
 export function useSectionNotes(versionId: string) {
-  return useQuery({
-    queryKey: sectionNotesKeys.byVersion(versionId),
-    queryFn: () => sectionNotesRepository.getByVersion(versionId),
-    enabled: !!versionId,
-  });
+  const result = useGraphQLQuery(
+    queryKeys.notes.byVersion(versionId),
+    SectionNotesDocument,
+    { versionId },
+    { enabled: !!versionId },
+  );
+
+  const rawNotes = result.data?.sectionNotes ?? [];
+  const normalizedNotes: SectionNoteEntity[] = rawNotes.map((n) => ({
+    id: n.id,
+    versionId: n.versionId,
+    sectionId: n.sectionId,
+    anchor: {
+      type: n.anchor.type.toLowerCase() as "line" | "range" | "word",
+      lineIndex: n.anchor.lineIndex ?? undefined,
+      wordOffset: n.anchor.wordOffset ?? undefined,
+      fromLineIndex: n.anchor.fromLineIndex ?? undefined,
+      toLineIndex: n.anchor.toLineIndex ?? undefined,
+    },
+    text: n.text,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+  }));
+
+  return {
+    ...result,
+    data: normalizedNotes,
+  };
 }
 
-// Get notes for a specific section
+/** Get notes for a specific section */
 export function useSectionNotesBySection(versionId: string, sectionId: string) {
-  return useQuery({
-    queryKey: sectionNotesKeys.bySection(versionId, sectionId),
-    queryFn: () => sectionNotesRepository.getBySection(versionId, sectionId),
-    enabled: !!versionId && !!sectionId,
-  });
+  const result = useGraphQLQuery(
+    queryKeys.notes.bySection(versionId, sectionId),
+    SectionNotesBySectionDocument,
+    { versionId, sectionId },
+    { enabled: !!versionId && !!sectionId },
+  );
+
+  const rawNotes = result.data?.sectionNotesBySection ?? [];
+  const normalizedNotes: SectionNoteEntity[] = rawNotes.map((n) => ({
+    id: n.id,
+    versionId: n.versionId,
+    sectionId: n.sectionId,
+    anchor: {
+      type: n.anchor.type.toLowerCase() as "line" | "range" | "word",
+      lineIndex: n.anchor.lineIndex ?? undefined,
+      wordOffset: n.anchor.wordOffset ?? undefined,
+      fromLineIndex: n.anchor.fromLineIndex ?? undefined,
+      toLineIndex: n.anchor.toLineIndex ?? undefined,
+    },
+    text: n.text,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+  }));
+
+  return {
+    ...result,
+    data: normalizedNotes,
+  };
 }
 
-// Get a single note
-export function useSectionNote(id: string) {
-  return useQuery({
-    queryKey: sectionNotesKeys.detail(id),
-    queryFn: () => sectionNotesRepository.getById(id),
-    enabled: !!id,
-  });
-}
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
 
-// Create note mutation
+/** Create note */
 export function useCreateSectionNote() {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (input: {
+  const mutation = useGraphQLMutation(CreateSectionNoteDocument, {
+    onSuccess: (data) => {
+      if (!data.createSectionNote.ok) return;
+      const note = data.createSectionNote.sectionNote;
+      if (note) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.notes.byVersion(note.versionId),
+        });
+      }
+    },
+  });
+
+  return {
+    ...mutation,
+    mutateAsync: async (input: {
       versionId: string;
       sectionId: string;
       occurrenceId?: string | null;
       anchor: SectionNoteAnchor;
       text: string;
-    }) => sectionNotesRepository.create(input),
-    onSuccess: (note) => {
-      queryClient.invalidateQueries({
-        queryKey: sectionNotesKeys.byVersion(note.versionId),
+    }) => {
+      const result = await mutation.mutateAsync({
+        input: {
+          versionId: input.versionId,
+          sectionId: input.sectionId,
+          occurrenceId: input.occurrenceId ?? undefined,
+          text: input.text,
+          anchor: {
+            type: input.anchor.type.toUpperCase() as AnchorType,
+            lineIndex: input.anchor.lineIndex,
+            wordOffset: input.anchor.wordOffset,
+            fromLineIndex: input.anchor.fromLineIndex,
+            toLineIndex: input.anchor.toLineIndex,
+          },
+        },
       });
+      const payload = result.createSectionNote;
+      if (!payload.ok || !payload.sectionNote) {
+        const msg =
+          payload.errors?.map((e) => e.message).join(", ") ??
+          "Erro ao criar nota";
+        throw new Error(msg);
+      }
+      return payload.sectionNote;
     },
-  });
+  };
 }
 
-// Update note mutation
+/** Update note */
 export function useUpdateSectionNote() {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: ({
-      id,
-      ...input
-    }: {
-      id: string;
-      anchor?: SectionNoteAnchor;
-      text?: string;
-      occurrenceId?: string | null;
-    }) => sectionNotesRepository.update(id, input),
-    onSuccess: (note) => {
+  const mutation = useGraphQLMutation(UpdateSectionNoteDocument, {
+    onSuccess: (data) => {
+      if (!data.updateSectionNote.ok) return;
+      const note = data.updateSectionNote.sectionNote;
       if (note) {
         queryClient.invalidateQueries({
-          queryKey: sectionNotesKeys.byVersion(note.versionId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: sectionNotesKeys.detail(note.id),
+          queryKey: queryKeys.notes.byVersion(note.versionId),
         });
       }
     },
   });
+
+  return {
+    ...mutation,
+    mutateAsync: async (args: {
+      id: string;
+      anchor?: SectionNoteAnchor;
+      text?: string;
+      occurrenceId?: string | null;
+    }) => {
+      const { id, ...patch } = args;
+      const gqlPatch: Record<string, unknown> = {};
+      if (patch.text !== undefined) gqlPatch.text = patch.text;
+      if (patch.occurrenceId !== undefined)
+        gqlPatch.occurrenceId = patch.occurrenceId;
+      if (patch.anchor) {
+        gqlPatch.anchor = {
+          type: patch.anchor.type.toUpperCase() as AnchorType,
+          lineIndex: patch.anchor.lineIndex,
+          wordOffset: patch.anchor.wordOffset,
+          fromLineIndex: patch.anchor.fromLineIndex,
+          toLineIndex: patch.anchor.toLineIndex,
+        };
+      }
+      const result = await mutation.mutateAsync({ id, patch: gqlPatch });
+      const payload = result.updateSectionNote;
+      if (!payload.ok || !payload.sectionNote) {
+        const msg =
+          payload.errors?.map((e) => e.message).join(", ") ??
+          "Erro ao atualizar nota";
+        throw new Error(msg);
+      }
+      return payload.sectionNote;
+    },
+  };
 }
 
-// Delete note mutation
+/** Delete note */
 export function useDeleteSectionNote(versionId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (id: string) => sectionNotesRepository.delete(id),
-    onSuccess: () => {
+  const mutation = useGraphQLMutation(DeleteSectionNoteDocument, {
+    onSuccess: (data) => {
+      if (!data.deleteSectionNote.ok) return;
       queryClient.invalidateQueries({
-        queryKey: sectionNotesKeys.byVersion(versionId),
+        queryKey: queryKeys.notes.byVersion(versionId),
       });
     },
   });
+
+  return {
+    ...mutation,
+    mutateAsync: async (id: string) => {
+      const result = await mutation.mutateAsync({ id });
+      const payload = result.deleteSectionNote;
+      if (!payload.ok) {
+        const msg =
+          payload.errors?.map((e) => e.message).join(", ") ??
+          "Erro ao remover nota";
+        throw new Error(msg);
+      }
+      return true;
+    },
+  };
 }

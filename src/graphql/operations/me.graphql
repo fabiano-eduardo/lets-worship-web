@@ -13,19 +13,23 @@ query MePreferences {
   }
 }
 
-mutation UpdateMePreferences(
-  $baseRev: Int
-  $patch: UpdateUserPreferencesInput!
-) {
-  updateMePreferences(baseRev: $baseRev, patch: $patch) {
-    id
-    defaultMapView {
-      showChords
-      showLyrics
-      showNotes
-      fontScale
+mutation UpdateMePreferences($patch: UpdateUserPreferencesInput!) {
+  updateMePreferences(patch: $patch) {
+    ok
+    errors {
+      message
+      field
     }
-    rev
-    updatedAt
+    userPreferences {
+      id
+      defaultMapView {
+        showChords
+        showLyrics
+        showNotes
+        fontScale
+      }
+      rev
+      updatedAt
+    }
   }
 }

@@ -41,18 +41,6 @@ export type KeySignature =
 export type TimeSignature = "2/4" | "3/4" | "4/4" | "6/8" | "12/8";
 
 // ============================================================================
-// Sync Fields (for future GraphQL sync)
-// ============================================================================
-
-export interface SyncFields {
-  remoteId?: string;
-  remoteRev?: number;
-  dirty?: boolean;
-  deleted?: boolean;
-  lastSyncedAt?: string; // ISO string
-}
-
-// ============================================================================
 // Section and Arrangement Types
 // ============================================================================
 
@@ -71,7 +59,7 @@ export interface SectionNote {
   text: string;
 }
 
-// Standalone SectionNote entity for IndexedDB (separate from inline notes)
+// Section note as returned from the server / used in components
 export interface SectionNoteEntity {
   id: string;
   versionId: string;
@@ -81,11 +69,6 @@ export interface SectionNoteEntity {
   text: string;
   createdAt: string;
   updatedAt: string;
-  // Sync fields
-  remoteId?: string;
-  remoteRev?: number;
-  dirty?: boolean;
-  deleted?: boolean;
 }
 
 export interface SectionBlock {
@@ -133,7 +116,7 @@ export interface MusicalMeta {
 }
 
 // ============================================================================
-// Main Entity Types
+// Main Entity Types (online-first — no sync fields)
 // ============================================================================
 
 export interface Song {
@@ -143,12 +126,6 @@ export interface Song {
   defaultVersionId: string | null;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
-  // Sync fields
-  remoteId?: string;
-  remoteRev?: number;
-  dirty?: boolean;
-  deleted?: boolean;
-  lastSyncedAt?: string;
 }
 
 export interface SongVersion {
@@ -158,15 +135,8 @@ export interface SongVersion {
   reference: VersionReference;
   musicalMeta: MusicalMeta;
   arrangement: VersionArrangement;
-  pinnedOffline: boolean;
   createdAt: string;
   updatedAt: string;
-  // Sync fields
-  remoteId?: string;
-  remoteRev?: number;
-  dirty?: boolean;
-  deleted?: boolean;
-  lastSyncedAt?: string;
 }
 
 // ============================================================================
@@ -197,7 +167,6 @@ export interface UpdateVersionInput {
   reference?: VersionReference;
   musicalMeta?: MusicalMeta;
   arrangement?: VersionArrangement;
-  pinnedOffline?: boolean;
 }
 
 // ============================================================================
@@ -209,91 +178,6 @@ export interface ParsedChord {
   quality: string; // e.g., "m", "dim", "aug", "7", "maj7", etc.
   bass?: string; // For slash chords, e.g., "B" in "G/B"
   original: string; // Original string as written
-}
-
-// ============================================================================
-// Export/Import Types
-// ============================================================================
-
-export interface ExportData {
-  version: string;
-  exportedAt: string;
-  songs: Song[];
-  versions: SongVersion[];
-}
-
-// ============================================================================
-// Sync Types (Outbox, SyncState, Conflicts)
-// ============================================================================
-
-export type EntityType = "song" | "songVersion" | "sectionNote";
-export type OutboxOperation = "UPSERT" | "DELETE";
-export type OutboxStatus = "PENDING" | "SENT" | "ACK" | "CONFLICT" | "REJECTED";
-
-export interface OutboxItem {
-  id: string; // mutationId (UUID)
-  deviceId: string;
-  entityType: EntityType;
-  op: OutboxOperation;
-  entityId: string;
-  baseRev?: number;
-  payload?: Record<string, unknown>;
-  createdAt: string;
-  status: OutboxStatus;
-  errorMessage?: string;
-}
-
-export interface SyncApplySummary {
-  upserts: number;
-  deletes: number;
-  conflicts: number;
-  skipped: number;
-  upsertsByEntity: Record<EntityType, number>;
-  deletesByEntity: Record<EntityType, number>;
-  conflictsByEntity: Record<EntityType, number>;
-}
-
-export interface SyncProbeState {
-  ranAt?: string;
-  serverTime?: string;
-  serverCursor?: string | null;
-  hasMore?: boolean;
-  changesCount?: number;
-  lastChangeAt?: string;
-  error?: string;
-}
-
-export interface SyncState {
-  id: string; // "main"
-  lastCursor?: string | null;
-  lastSyncAt?: string;
-  lastError?: string;
-  lastPushAt?: string;
-  lastPullAt?: string;
-  lastSyncId?: string;
-  lastSyncSource?: "manual" | "auto";
-  lastSyncMode?: "normal" | "force_full";
-  lastServerTime?: string;
-  ownerUid?: string;
-  lastProbe?: SyncProbeState;
-  lastApplySummary?: SyncApplySummary;
-  lastVerifyCounts?: {
-    songsCount: number;
-    versionsCount: number;
-    notesCount: number;
-    mapItemsCount: number;
-  };
-  deviceId: string;
-}
-
-export interface SyncConflict {
-  id: string;
-  entityType: EntityType;
-  entityId: string;
-  localVersion: Record<string, unknown>;
-  remoteVersion: Record<string, unknown>;
-  createdAt: string;
-  resolved: boolean;
 }
 
 // ============================================================================

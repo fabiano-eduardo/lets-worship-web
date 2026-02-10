@@ -125,13 +125,6 @@ export const queryKeys = {
       [...queryKeys.notes.all, "byVersion", versionId] as const,
   },
 
-  // Sync
-  sync: {
-    all: ["sync"] as const,
-    pull: (cursor?: string | null) =>
-      [...queryKeys.sync.all, "pull", cursor] as const,
-  },
-
   // User
   user: {
     me: ["user", "me"] as const,
@@ -191,14 +184,7 @@ export function useInvalidateQueries() {
     },
 
     /**
-     * Invalidate all sync-related queries.
-     */
-    invalidateSync: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.sync.all });
-    },
-
-    /**
-     * Invalidate everything after a full sync.
+     * Invalidate everything.
      */
     invalidateAll: () => {
       queryClient.invalidateQueries();

@@ -15,8 +15,12 @@ import {
   useVersion,
   useUpdateVersion,
   useDeleteVersion,
-  useTogglePin,
 } from "../hooks/useVersions";
+import {
+  useIsOfflineAvailable,
+  useDownloadOffline,
+  useRemoveOffline,
+} from "@/features/offline";
 import {
   useSongMapItems,
   useReplaceSongMapItems,
@@ -111,7 +115,9 @@ export function VersionDetailPage() {
     useSongMapItems(versionId);
   const updateVersion = useUpdateVersion();
   const deleteVersion = useDeleteVersion();
-  const togglePin = useTogglePin();
+  const { data: isOffline } = useIsOfflineAvailable(versionId);
+  const downloadOffline = useDownloadOffline();
+  const removeOffline = useRemoveOffline();
   const replaceSongMapItems = useReplaceSongMapItems();
 
   const [viewMode, setViewMode] = useState<ViewMode>("view");
@@ -159,7 +165,8 @@ export function VersionDetailPage() {
     return sectionNotes.filter(
       (n) =>
         n.sectionId === sectionId &&
-        (n.occurrenceId == null || n.occurrenceId === occurrenceId),
+        ((n as SectionNoteEntity).occurrenceId == null ||
+          (n as SectionNoteEntity).occurrenceId === occurrenceId),
     );
   };
 
@@ -179,21 +186,43 @@ export function VersionDetailPage() {
   useEffect(() => {
     if (!version) return;
     setEditLabel(version.label);
-    setEditBpm(version.musicalMeta.bpm?.toString() || "");
-    setEditTimeSignature(version.musicalMeta.timeSignature || "");
+    setEditBpm(version.musicalMeta?.bpm?.toString() || "");
+    setEditTimeSignature(
+      (version.musicalMeta?.timeSignature as TimeSignature) || "",
+    );
 
-    if (version.musicalMeta.originalKey) {
-      setEditKeyRoot(version.musicalMeta.originalKey.root);
+    if (version.musicalMeta?.originalKey) {
+      setEditKeyRoot(version.musicalMeta.originalKey.root as NoteName);
       if (version.musicalMeta.originalKey.type === "tonal") {
         setEditKeyType("tonal");
-        setEditTonalQuality(version.musicalMeta.originalKey.tonalQuality);
+        setEditTonalQuality(
+          version.musicalMeta.originalKey.tonalQuality as TonalQuality,
+        );
       } else {
         setEditKeyType("modal");
-        setEditMode(version.musicalMeta.originalKey.mode);
+        setEditMode(version.musicalMeta.originalKey.mode as ModalMode);
       }
     }
 
-    setSections(version.arrangement.sections);
+    setSections(
+      (version.arrangement?.sections ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        chordProText: s.chordProText,
+        notes: (s.notes ?? []).map((n) => ({
+          id: n.id,
+          sectionId: n.sectionId,
+          text: n.text,
+          anchor: {
+            type: n.anchor.type.toLowerCase() as "line" | "range" | "word",
+            lineIndex: n.anchor.lineIndex ?? undefined,
+            wordOffset: n.anchor.wordOffset ?? undefined,
+            fromLineIndex: n.anchor.fromLineIndex ?? undefined,
+            toLineIndex: n.anchor.toLineIndex ?? undefined,
+          },
+        })),
+      })),
+    );
     setHasArrangementChanges(false);
   }, [version?.id]);
 
@@ -232,16 +261,39 @@ export function VersionDetailPage() {
         ? mapItemsData
         : buildMapItemsFromArrangement({
             songVersionId: version.id,
-            sections: version.arrangement.sections,
-            sequence: version.arrangement.sequence,
+            sections: (version.arrangement?.sections ?? []).map((s) => ({
+              id: s.id,
+              name: s.name,
+              chordProText: s.chordProText,
+              notes: (s.notes ?? []).map((n) => ({
+                id: n.id,
+                sectionId: n.sectionId,
+                text: n.text,
+                anchor: {
+                  type: n.anchor.type.toLowerCase() as
+                    | "line"
+                    | "range"
+                    | "word",
+                  lineIndex: n.anchor.lineIndex ?? undefined,
+                  wordOffset: n.anchor.wordOffset ?? undefined,
+                  fromLineIndex: n.anchor.fromLineIndex ?? undefined,
+                  toLineIndex: n.anchor.toLineIndex ?? undefined,
+                },
+              })),
+            })),
+            sequence: (version.arrangement?.sequence ?? []).map((s) => ({
+              sectionId: s.sectionId,
+              repeat: s.repeat ?? undefined,
+              sequenceNotes: s.sequenceNotes ?? undefined,
+            })),
           });
 
     setMapItems(sortMapItems(initial));
 
     if (
       mapItemsData.length === 0 &&
-      (version.arrangement.sections.length > 0 ||
-        version.arrangement.sequence.length > 0)
+      ((version.arrangement?.sections?.length ?? 0) > 0 ||
+        (version.arrangement?.sequence?.length ?? 0) > 0)
     ) {
       void replaceSongMapItems
         .mutateAsync({
@@ -268,13 +320,12 @@ export function VersionDetailPage() {
   );
 
   const presentationStyle = useMemo(() => {
-    const lyricsPx = Math.round((18 * lyricsScale) / 100);
-    const chordsPx = Math.round((16 * lyricsScale) / 100);
+    const sharedPx = Math.round((18 * lyricsScale) / 100);
     const notesPx = Math.round((14 * notesScale) / 100);
 
     return {
-      "--presentation-lyrics-font-size": `${lyricsPx}px`,
-      "--presentation-chords-font-size": `${chordsPx}px`,
+      "--presentation-lyrics-font-size": `${sharedPx}px`,
+      "--presentation-chords-font-size": `${sharedPx}px`,
       "--presentation-notes-font-size": `${notesPx}px`,
     } as CSSProperties;
   }, [lyricsScale, notesScale]);
@@ -310,11 +361,13 @@ export function VersionDetailPage() {
 
   const handleTogglePin = async () => {
     try {
-      const isPinned = await togglePin.mutateAsync(version.id);
-      showToast(
-        "success",
-        isPinned ? "Disponível offline" : "Removido do offline",
-      );
+      if (isOffline) {
+        await removeOffline.mutateAsync(versionId);
+        showToast("success", "Removido do offline");
+      } else {
+        await downloadOffline.mutateAsync(versionId);
+        showToast("success", "Disponível offline");
+      }
     } catch {
       showToast("error", "Erro ao atualizar");
     }
@@ -393,7 +446,23 @@ export function VersionDetailPage() {
     setHasArrangementChanges(true);
   };
 
-  const originalKey = version.musicalMeta.originalKey;
+  const originalKey: KeySignature | null = (() => {
+    const gqlKey = version.musicalMeta?.originalKey;
+    if (!gqlKey) return null;
+    const root = gqlKey.root as NoteName;
+    if (gqlKey.type === "tonal") {
+      return {
+        type: "tonal" as const,
+        root,
+        tonalQuality: (gqlKey.tonalQuality ?? "major") as TonalQuality,
+      };
+    }
+    return {
+      type: "modal" as const,
+      root,
+      mode: (gqlKey.mode?.toLowerCase() ?? "ionian") as ModalMode,
+    };
+  })();
   const effectiveTargetKey = targetKey || originalKey?.root || null;
 
   // Performance mode
@@ -556,15 +625,9 @@ export function VersionDetailPage() {
               size="sm"
               isIcon
               onClick={handleTogglePin}
-              aria-label={
-                version.pinnedOffline ? "Remover offline" : "Baixar offline"
-              }
+              aria-label={isOffline ? "Remover offline" : "Baixar offline"}
             >
-              {version.pinnedOffline ? (
-                <IconPinOff size={20} />
-              ) : (
-                <IconPin size={20} />
-              )}
+              {isOffline ? <IconPinOff size={20} /> : <IconPin size={20} />}
             </Button>
             <Button
               variant="ghost"
@@ -597,7 +660,7 @@ export function VersionDetailPage() {
         {/* Meta info */}
         <div className="card p-4 mb-6">
           <div className="flex flex-wrap gap-4">
-            {version.musicalMeta.originalKey && (
+            {version.musicalMeta?.originalKey && (
               <div>
                 <span className="text-sm text-muted">Tom:</span>
                 <span
@@ -613,7 +676,7 @@ export function VersionDetailPage() {
                 </span>
               </div>
             )}
-            {version.musicalMeta.bpm && (
+            {version.musicalMeta?.bpm && (
               <div>
                 <span className="text-sm text-muted">BPM:</span>
                 <span className="ml-2 font-semibold">
@@ -621,7 +684,7 @@ export function VersionDetailPage() {
                 </span>
               </div>
             )}
-            {version.musicalMeta.timeSignature && (
+            {version.musicalMeta?.timeSignature && (
               <div>
                 <span className="text-sm text-muted">Compasso:</span>
                 <span className="ml-2 font-semibold">
@@ -633,7 +696,7 @@ export function VersionDetailPage() {
 
           {/* Reference links */}
           <div className="flex gap-3 mt-4">
-            {version.reference.youtubeUrl && (
+            {version.reference?.youtubeUrl && (
               <a
                 href={version.reference.youtubeUrl}
                 target="_blank"
@@ -645,7 +708,7 @@ export function VersionDetailPage() {
                 <IconExternalLink size={14} />
               </a>
             )}
-            {version.reference.spotifyUrl && (
+            {version.reference?.spotifyUrl && (
               <a
                 href={version.reference.spotifyUrl}
                 target="_blank"
@@ -658,7 +721,7 @@ export function VersionDetailPage() {
               </a>
             )}
           </div>
-          {version.reference.descriptionIfNoLink && (
+          {version.reference?.descriptionIfNoLink && (
             <p className="text-sm text-muted mt-3">
               {version.reference.descriptionIfNoLink}
             </p>

@@ -26,7 +26,6 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean };
   Int: { input: number; output: number };
   Float: { input: number; output: number };
-  JSON: { input: Record<string, unknown>; output: Record<string, unknown> };
 };
 
 export type Anchor = {
@@ -62,22 +61,8 @@ export type ArrangementInput = {
   sequence: Array<SequenceItemInput>;
 };
 
-export type ChangeLogEntry = {
-  changedAt: Scalars["String"]["output"];
-  cursorId: Scalars["String"]["output"];
-  entityId: Scalars["String"]["output"];
-  entityType: EntityType;
-  op: ChangeOp;
-  rev: Scalars["Int"]["output"];
-  sourceDeviceId?: Maybe<Scalars["String"]["output"]>;
-};
-
-export type ChangeOp = "DELETE" | "UPSERT";
-
 export type CreateSectionNoteInput = {
   anchor: AnchorInput;
-  /** Optional client-provided ID for sync */
-  id?: InputMaybe<Scalars["String"]["input"]>;
   occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
   sectionId: Scalars["String"]["input"];
   text: Scalars["String"]["input"];
@@ -87,19 +72,20 @@ export type CreateSectionNoteInput = {
 export type CreateSongInput = {
   artist?: InputMaybe<Scalars["String"]["input"]>;
   defaultVersionId?: InputMaybe<Scalars["String"]["input"]>;
-  id?: InputMaybe<Scalars["String"]["input"]>;
-  syncMeta?: InputMaybe<SyncMetaInput>;
   title: Scalars["String"]["input"];
 };
 
 export type CreateSongVersionInput = {
   arrangement?: InputMaybe<ArrangementInput>;
-  id?: InputMaybe<Scalars["String"]["input"]>;
   label: Scalars["String"]["input"];
   musicalMeta?: InputMaybe<MusicalMetaInput>;
   reference?: InputMaybe<ReferenceInput>;
   songId: Scalars["String"]["input"];
-  syncMeta?: InputMaybe<SyncMetaInput>;
+};
+
+export type DeletePayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
 };
 
 export type EmbeddedSectionNote = {
@@ -115,12 +101,6 @@ export type EmbeddedSectionNoteInput = {
   sectionId: Scalars["String"]["input"];
   text: Scalars["String"]["input"];
 };
-
-export type EntityType =
-  | "SECTION_NOTE"
-  | "SONG"
-  | "SONG_MAP_ITEM"
-  | "SONG_VERSION";
 
 export type HealthStatus = {
   serverTime: Scalars["String"]["output"];
@@ -203,33 +183,31 @@ export type MusicalMode =
 
 export type Mutation = {
   /** Create a new section note */
-  createSectionNote: SectionNote;
+  createSectionNote: SectionNotePayload;
   /** Create a new song */
-  createSong: Song;
+  createSong: SongPayload;
   /** Create a new song version */
-  createSongVersion: SongVersion;
+  createSongVersion: SongVersionPayload;
   /** Delete a section note (soft delete) */
-  deleteSectionNote: Scalars["Boolean"]["output"];
+  deleteSectionNote: DeletePayload;
   /** Delete a song (soft delete) */
-  deleteSong: Song;
+  deleteSong: SongPayload;
   /** Delete a song map item (soft delete) */
-  deleteSongMapItem: Scalars["Boolean"]["output"];
+  deleteSongMapItem: DeletePayload;
   /** Delete a song version (soft delete) */
-  deleteSongVersion: SongVersion;
+  deleteSongVersion: SongVersionPayload;
   /** Reorder map items for a song version */
-  reorderSongMapItems: Array<SongMapItem>;
-  /** Push client mutations to the server. Returns status for each mutation. */
-  syncPush: SyncPushResult;
+  reorderSongMapItems: SongMapItemListPayload;
   /** Update current user preferences */
-  updateMePreferences: UserPreferences;
+  updateMePreferences: UserPreferencesPayload;
   /** Update a section note */
-  updateSectionNote: SectionNote;
+  updateSectionNote: SectionNotePayload;
   /** Update an existing song */
-  updateSong: Song;
+  updateSong: SongPayload;
   /** Update an existing song version */
-  updateSongVersion: SongVersion;
+  updateSongVersion: SongVersionPayload;
   /** Upsert a song map item */
-  upsertSongMapItem: SongMapItem;
+  upsertSongMapItem: SongMapItemPayload;
 };
 
 export type MutationCreateSectionNoteArgs = {
@@ -245,22 +223,18 @@ export type MutationCreateSongVersionArgs = {
 };
 
 export type MutationDeleteSectionNoteArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSongArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSongMapItemArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSongVersionArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
 };
 
@@ -268,17 +242,11 @@ export type MutationReorderSongMapItemsArgs = {
   input: ReorderSongMapItemsInput;
 };
 
-export type MutationSyncPushArgs = {
-  input: SyncPushInput;
-};
-
 export type MutationUpdateMePreferencesArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   patch: UpdateUserPreferencesInput;
 };
 
 export type MutationUpdateSectionNoteArgs = {
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   id: Scalars["ID"]["input"];
   patch: UpdateSectionNoteInput;
 };
@@ -297,23 +265,12 @@ export type MutationUpsertSongMapItemArgs = {
   input: UpsertSongMapItemInput;
 };
 
-export type MutationResult = {
-  entityId: Scalars["String"]["output"];
-  mutationId: Scalars["String"]["output"];
-  /** New revision if applied */
-  newRev?: Maybe<Scalars["Int"]["output"]>;
-  /** Reason for rejection or conflict */
-  reason?: Maybe<Scalars["String"]["output"]>;
-  /** Server entity state if conflict or needed */
-  serverEntity?: Maybe<Scalars["JSON"]["output"]>;
-  status: MutationStatus;
+export type MutationError = {
+  field?: Maybe<Scalars["String"]["output"]>;
+  message: Scalars["String"]["output"];
 };
 
-export type MutationStatus = "APPLIED" | "CONFLICT" | "REJECTED";
-
 export type Query = {
-  /** Get current server state of an entity (for conflict resolution) */
-  getEntityState?: Maybe<Scalars["JSON"]["output"]>;
   /** Health check endpoint */
   health: HealthStatus;
   /** Get current user preferences */
@@ -334,15 +291,6 @@ export type Query = {
   songVersions: Array<SongVersion>;
   /** Get all songs with optional search and pagination */
   songs: SongsResult;
-  /** Pull incremental changes since a cursor. Use for sync. */
-  syncPull: SyncPullResult;
-  /** Sync status/probe with server revision and entity counts */
-  syncStatus: SyncStatus;
-};
-
-export type QueryGetEntityStateArgs = {
-  entityId: Scalars["ID"]["input"];
-  entityType: EntityType;
 };
 
 export type QuerySectionNoteArgs = {
@@ -379,10 +327,6 @@ export type QuerySongsArgs = {
   cursor?: InputMaybe<Scalars["String"]["input"]>;
   limit?: InputMaybe<Scalars["Int"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
-};
-
-export type QuerySyncPullArgs = {
-  input: SyncPullInput;
 };
 
 export type Reference = {
@@ -432,6 +376,12 @@ export type SectionNote = {
   versionId: Scalars["String"]["output"];
 };
 
+export type SectionNotePayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  sectionNote?: Maybe<SectionNote>;
+};
+
 export type SequenceItem = {
   repeat?: Maybe<Scalars["Int"]["output"]>;
   sectionId: Scalars["String"]["output"];
@@ -454,7 +404,6 @@ export type Song = {
   ownerUid: Scalars["String"]["output"];
   rev: Scalars["Int"]["output"];
   schemaVersion: Scalars["Int"]["output"];
-  syncMeta?: Maybe<SyncMeta>;
   title: Scalars["String"]["output"];
   updatedAt: Scalars["String"]["output"];
 };
@@ -473,6 +422,24 @@ export type SongMapItem = {
   updatedAt: Scalars["String"]["output"];
 };
 
+export type SongMapItemListPayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  songMapItems?: Maybe<Array<SongMapItem>>;
+};
+
+export type SongMapItemPayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  songMapItem?: Maybe<SongMapItem>;
+};
+
+export type SongPayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  song?: Maybe<Song>;
+};
+
 export type SongVersion = {
   arrangement?: Maybe<Arrangement>;
   createdAt: Scalars["String"]["output"];
@@ -486,137 +453,18 @@ export type SongVersion = {
   rev: Scalars["Int"]["output"];
   schemaVersion: Scalars["Int"]["output"];
   songId: Scalars["String"]["output"];
-  syncMeta?: Maybe<SyncMeta>;
   updatedAt: Scalars["String"]["output"];
+};
+
+export type SongVersionPayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  songVersion?: Maybe<SongVersion>;
 };
 
 export type SongsResult = {
   nextCursor?: Maybe<Scalars["String"]["output"]>;
   songs: Array<Song>;
-};
-
-export type SyncEntitiesSnapshot = {
-  mapItems?: Maybe<Array<SongMapItem>>;
-  notes?: Maybe<Array<SectionNote>>;
-  songs?: Maybe<Array<Song>>;
-  versions?: Maybe<Array<SongVersion>>;
-};
-
-export type SyncEntityCounts = {
-  mapItems: Scalars["Int"]["output"];
-  notes: Scalars["Int"]["output"];
-  songs: Scalars["Int"]["output"];
-  versions: Scalars["Int"]["output"];
-};
-
-export type SyncMeta = {
-  lastMutationId?: Maybe<Scalars["String"]["output"]>;
-  updatedByDeviceId?: Maybe<Scalars["String"]["output"]>;
-};
-
-export type SyncMetaInput = {
-  lastMutationId?: InputMaybe<Scalars["String"]["input"]>;
-  updatedByDeviceId?: InputMaybe<Scalars["String"]["input"]>;
-};
-
-export type SyncMutationInput = {
-  /** Base revision for conflict detection. If omitted, LWW applies. */
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
-  /** Client timestamp for informational purposes */
-  clientUpdatedAt?: InputMaybe<Scalars["String"]["input"]>;
-  /** Entity data for UPSERT operations */
-  entity?: InputMaybe<Scalars["JSON"]["input"]>;
-  /** Entity ID (always required) */
-  entityId: Scalars["String"]["input"];
-  entityType: EntityType;
-  /** Client-generated mutation ID for idempotency */
-  mutationId: Scalars["String"]["input"];
-  op: ChangeOp;
-};
-
-export type SyncPullInput = {
-  /** Device ID (optional, for diagnostics) */
-  deviceId?: InputMaybe<Scalars["String"]["input"]>;
-  /** Include entity snapshots in response to reduce round-trips */
-  includeEntities?: InputMaybe<Scalars["Boolean"]["input"]>;
-  limit?: InputMaybe<Scalars["Int"]["input"]>;
-  /** Cursor from previous pull (ULID) */
-  sinceCursor?: InputMaybe<Scalars["String"]["input"]>;
-  /** Force a full snapshot pull (ignores changeLog) */
-  snapshotAll?: InputMaybe<Scalars["Boolean"]["input"]>;
-  /** Per-entity snapshot cursor (document IDs) */
-  snapshotCursor?: InputMaybe<SyncSnapshotCursorInput>;
-  /** Snapshot page size (per entity) */
-  snapshotLimit?: InputMaybe<Scalars["Int"]["input"]>;
-  /** Fetch snapshots updated after this ISO timestamp */
-  snapshotSince?: InputMaybe<Scalars["String"]["input"]>;
-};
-
-export type SyncPullResult = {
-  changes: Array<ChangeLogEntry>;
-  /** Indicates client cursor is ahead of server state */
-  cursorResetSuggested?: Maybe<Scalars["Boolean"]["output"]>;
-  /** Entity snapshots if includeEntities was true */
-  entities?: Maybe<SyncEntitiesSnapshot>;
-  /** Whether there are more changes available */
-  hasMore: Scalars["Boolean"]["output"];
-  /** Timestamp of latest changelog entry (diagnostic) */
-  lastChangeAt?: Maybe<Scalars["String"]["output"]>;
-  /** Cursor for next pull */
-  nextCursor?: Maybe<Scalars["String"]["output"]>;
-  /** Latest server changelog cursor (diagnostic) */
-  serverCursor?: Maybe<Scalars["String"]["output"]>;
-  /** Max rev in changelog (diagnostic) */
-  serverRev?: Maybe<Scalars["Int"]["output"]>;
-  /** Current server time as ISO string */
-  serverTime: Scalars["String"]["output"];
-  /** Snapshot pagination state (per entity) */
-  snapshotHasMore?: Maybe<SyncSnapshotHasMore>;
-  /** Next snapshot cursor (per entity) when snapshot mode is used */
-  snapshotNextCursor?: Maybe<SyncSnapshotCursor>;
-  /** Reason for snapshot mode if used */
-  snapshotReason?: Maybe<Scalars["String"]["output"]>;
-};
-
-export type SyncPushInput = {
-  /** Device ID for tracking mutations */
-  deviceId: Scalars["String"]["input"];
-  mutations: Array<SyncMutationInput>;
-};
-
-export type SyncPushResult = {
-  applied: Array<MutationResult>;
-  /** Current server time as ISO string */
-  serverTime: Scalars["String"]["output"];
-};
-
-export type SyncSnapshotCursor = {
-  mapItems?: Maybe<Scalars["String"]["output"]>;
-  notes?: Maybe<Scalars["String"]["output"]>;
-  songs?: Maybe<Scalars["String"]["output"]>;
-  versions?: Maybe<Scalars["String"]["output"]>;
-};
-
-export type SyncSnapshotCursorInput = {
-  mapItems?: InputMaybe<Scalars["String"]["input"]>;
-  notes?: InputMaybe<Scalars["String"]["input"]>;
-  songs?: InputMaybe<Scalars["String"]["input"]>;
-  versions?: InputMaybe<Scalars["String"]["input"]>;
-};
-
-export type SyncSnapshotHasMore = {
-  mapItems: Scalars["Boolean"]["output"];
-  notes: Scalars["Boolean"]["output"];
-  songs: Scalars["Boolean"]["output"];
-  versions: Scalars["Boolean"]["output"];
-};
-
-export type SyncStatus = {
-  counts: SyncEntityCounts;
-  lastChangeAt?: Maybe<Scalars["String"]["output"]>;
-  ownerUid: Scalars["String"]["output"];
-  serverCursor?: Maybe<Scalars["String"]["output"]>;
-  serverRev?: Maybe<Scalars["Int"]["output"]>;
 };
 
 /** Major or minor quality */
@@ -630,21 +478,15 @@ export type UpdateSectionNoteInput = {
 
 export type UpdateSongInput = {
   artist?: InputMaybe<Scalars["String"]["input"]>;
-  /** Base revision for conflict detection */
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   defaultVersionId?: InputMaybe<Scalars["String"]["input"]>;
-  syncMeta?: InputMaybe<SyncMetaInput>;
   title?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateSongVersionInput = {
   arrangement?: InputMaybe<ArrangementInput>;
-  /** Base revision for conflict detection */
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   label?: InputMaybe<Scalars["String"]["input"]>;
   musicalMeta?: InputMaybe<MusicalMetaInput>;
   reference?: InputMaybe<ReferenceInput>;
-  syncMeta?: InputMaybe<SyncMetaInput>;
 };
 
 export type UpdateUserPreferencesInput = {
@@ -652,10 +494,6 @@ export type UpdateUserPreferencesInput = {
 };
 
 export type UpsertSongMapItemInput = {
-  /** Base revision for conflict detection */
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
-  /** Optional client-provided ID for sync */
-  id?: InputMaybe<Scalars["String"]["input"]>;
   labelOverride?: InputMaybe<Scalars["String"]["input"]>;
   order: Scalars["Int"]["input"];
   sectionId: Scalars["String"]["input"];
@@ -667,6 +505,12 @@ export type UserPreferences = {
   id: Scalars["ID"]["output"];
   rev: Scalars["Int"]["output"];
   updatedAt: Scalars["String"]["output"];
+};
+
+export type UserPreferencesPayload = {
+  errors?: Maybe<Array<MutationError>>;
+  ok: Scalars["Boolean"]["output"];
+  userPreferences?: Maybe<UserPreferences>;
 };
 
 export type HealthQueryVariables = Exact<{ [key: string]: never }>;
@@ -692,21 +536,24 @@ export type MePreferencesQuery = {
 };
 
 export type UpdateMePreferencesMutationVariables = Exact<{
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   patch: UpdateUserPreferencesInput;
 }>;
 
 export type UpdateMePreferencesMutation = {
   updateMePreferences: {
-    id: string;
-    rev: number;
-    updatedAt: string;
-    defaultMapView: {
-      showChords: boolean;
-      showLyrics: boolean;
-      showNotes: boolean;
-      fontScale?: number | null;
-    };
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    userPreferences?: {
+      id: string;
+      rev: number;
+      updatedAt: string;
+      defaultMapView: {
+        showChords: boolean;
+        showLyrics: boolean;
+        showNotes: boolean;
+        fontScale?: number | null;
+      };
+    } | null;
   };
 };
 
@@ -780,51 +627,65 @@ export type CreateSectionNoteMutationVariables = Exact<{
 
 export type CreateSectionNoteMutation = {
   createSectionNote: {
-    id: string;
-    versionId: string;
-    sectionId: string;
-    text: string;
-    createdAt: string;
-    updatedAt: string;
-    rev: number;
-    anchor: {
-      type: AnchorType;
-      lineIndex?: number | null;
-      wordOffset?: number | null;
-      fromLineIndex?: number | null;
-      toLineIndex?: number | null;
-    };
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    sectionNote?: {
+      id: string;
+      versionId: string;
+      sectionId: string;
+      text: string;
+      createdAt: string;
+      updatedAt: string;
+      rev: number;
+      anchor: {
+        type: AnchorType;
+        lineIndex?: number | null;
+        wordOffset?: number | null;
+        fromLineIndex?: number | null;
+        toLineIndex?: number | null;
+      };
+    } | null;
   };
 };
 
 export type UpdateSectionNoteMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
   patch: UpdateSectionNoteInput;
 }>;
 
 export type UpdateSectionNoteMutation = {
   updateSectionNote: {
-    id: string;
-    text: string;
-    updatedAt: string;
-    rev: number;
-    anchor: {
-      type: AnchorType;
-      lineIndex?: number | null;
-      wordOffset?: number | null;
-      fromLineIndex?: number | null;
-      toLineIndex?: number | null;
-    };
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    sectionNote?: {
+      id: string;
+      versionId: string;
+      sectionId: string;
+      text: string;
+      createdAt: string;
+      updatedAt: string;
+      rev: number;
+      anchor: {
+        type: AnchorType;
+        lineIndex?: number | null;
+        wordOffset?: number | null;
+        fromLineIndex?: number | null;
+        toLineIndex?: number | null;
+      };
+    } | null;
   };
 };
 
 export type DeleteSectionNoteMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
 }>;
 
-export type DeleteSectionNoteMutation = { deleteSectionNote: boolean };
+export type DeleteSectionNoteMutation = {
+  deleteSectionNote: {
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+  };
+};
 
 export type SongFieldsFragment = {
   id: string;
@@ -975,14 +836,18 @@ export type CreateSongMutationVariables = Exact<{
 
 export type CreateSongMutation = {
   createSong: {
-    id: string;
-    title: string;
-    artist?: string | null;
-    defaultVersionId?: string | null;
-    ownerUid: string;
-    createdAt: string;
-    updatedAt: string;
-    rev: number;
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    song?: {
+      id: string;
+      title: string;
+      artist?: string | null;
+      defaultVersionId?: string | null;
+      ownerUid: string;
+      createdAt: string;
+      updatedAt: string;
+      rev: number;
+    } | null;
   };
 };
 
@@ -993,132 +858,30 @@ export type UpdateSongMutationVariables = Exact<{
 
 export type UpdateSongMutation = {
   updateSong: {
-    id: string;
-    title: string;
-    artist?: string | null;
-    defaultVersionId?: string | null;
-    updatedAt: string;
-    rev: number;
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    song?: {
+      id: string;
+      title: string;
+      artist?: string | null;
+      defaultVersionId?: string | null;
+      ownerUid: string;
+      createdAt: string;
+      updatedAt: string;
+      rev: number;
+    } | null;
   };
 };
 
 export type DeleteSongMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
 }>;
 
 export type DeleteSongMutation = {
-  deleteSong: { id: string; deletedAt?: string | null };
-};
-
-export type SyncPullQueryVariables = Exact<{
-  input: SyncPullInput;
-}>;
-
-export type SyncPullQuery = {
-  syncPull: {
-    nextCursor?: string | null;
-    hasMore: boolean;
-    serverTime: string;
-    changes: Array<{
-      entityType: EntityType;
-      entityId: string;
-      op: ChangeOp;
-      rev: number;
-      cursorId: string;
-      changedAt: string;
-    }>;
-    entities?: {
-      songs?: Array<{
-        id: string;
-        title: string;
-        artist?: string | null;
-        defaultVersionId?: string | null;
-        createdAt: string;
-        updatedAt: string;
-        rev: number;
-      }> | null;
-      versions?: Array<{
-        id: string;
-        songId: string;
-        label: string;
-        createdAt: string;
-        updatedAt: string;
-        rev: number;
-        arrangement?: {
-          sections: Array<{
-            id: string;
-            name: string;
-            chordProText: string;
-            notes?: Array<{
-              id: string;
-              sectionId: string;
-              text: string;
-              anchor: {
-                type: LegacyAnchorType;
-                lineIndex?: number | null;
-                wordOffset?: number | null;
-                fromLineIndex?: number | null;
-                toLineIndex?: number | null;
-              };
-            }> | null;
-          }>;
-          sequence: Array<{
-            sectionId: string;
-            repeat?: number | null;
-            sequenceNotes?: Array<string> | null;
-          }>;
-        } | null;
-        reference?: {
-          youtubeUrl?: string | null;
-          spotifyUrl?: string | null;
-          descriptionIfNoLink?: string | null;
-        } | null;
-        musicalMeta?: {
-          bpm?: number | null;
-          timeSignature?: string | null;
-          originalKey?: {
-            root: string;
-            mode?: MusicalMode | null;
-            type: KeyType;
-            tonalQuality?: TonalQuality | null;
-          } | null;
-        } | null;
-      }> | null;
-      notes?: Array<{
-        id: string;
-        versionId: string;
-        sectionId: string;
-        text: string;
-        createdAt: string;
-        updatedAt: string;
-        rev: number;
-        anchor: {
-          type: AnchorType;
-          lineIndex?: number | null;
-          wordOffset?: number | null;
-          fromLineIndex?: number | null;
-          toLineIndex?: number | null;
-        };
-      }> | null;
-    } | null;
-  };
-};
-
-export type SyncPushMutationVariables = Exact<{
-  input: SyncPushInput;
-}>;
-
-export type SyncPushMutation = {
-  syncPush: {
-    serverTime: string;
-    applied: Array<{
-      mutationId: string;
-      status: MutationStatus;
-      entityId: string;
-      newRev?: number | null;
-      reason?: string | null;
-    }>;
+  deleteSong: {
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    song?: { id: string } | null;
   };
 };
 
@@ -1183,12 +946,16 @@ export type CreateSongVersionMutationVariables = Exact<{
 
 export type CreateSongVersionMutation = {
   createSongVersion: {
-    id: string;
-    songId: string;
-    label: string;
-    createdAt: string;
-    updatedAt: string;
-    rev: number;
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    songVersion?: {
+      id: string;
+      songId: string;
+      label: string;
+      createdAt: string;
+      updatedAt: string;
+      rev: number;
+    } | null;
   };
 };
 
@@ -1199,20 +966,28 @@ export type UpdateSongVersionMutationVariables = Exact<{
 
 export type UpdateSongVersionMutation = {
   updateSongVersion: {
-    id: string;
-    label: string;
-    updatedAt: string;
-    rev: number;
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    songVersion?: {
+      id: string;
+      songId: string;
+      label: string;
+      updatedAt: string;
+      rev: number;
+    } | null;
   };
 };
 
 export type DeleteSongVersionMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
-  baseRev?: InputMaybe<Scalars["Int"]["input"]>;
 }>;
 
 export type DeleteSongVersionMutation = {
-  deleteSongVersion: { id: string; deletedAt?: string | null };
+  deleteSongVersion: {
+    ok: boolean;
+    errors?: Array<{ message: string; field?: string | null }> | null;
+    songVersion?: { id: string } | null;
+  };
 };
 
 export const SectionNoteFieldsFragmentDoc = {
@@ -1599,14 +1374,6 @@ export const UpdateMePreferencesDocument = {
           kind: "VariableDefinition",
           variable: {
             kind: "Variable",
-            name: { kind: "Name", value: "baseRev" },
-          },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
             name: { kind: "Name", value: "patch" },
           },
           type: {
@@ -1627,14 +1394,6 @@ export const UpdateMePreferencesDocument = {
             arguments: [
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "baseRev" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "baseRev" },
-                },
-              },
-              {
-                kind: "Argument",
                 name: { kind: "Name", value: "patch" },
                 value: {
                   kind: "Variable",
@@ -1645,34 +1404,61 @@ export const UpdateMePreferencesDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "defaultMapView" },
+                  name: { kind: "Name", value: "errors" },
                   selectionSet: {
                     kind: "SelectionSet",
                     selections: [
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "showChords" },
+                        name: { kind: "Name", value: "message" },
                       },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "userPreferences" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "showLyrics" },
+                        name: { kind: "Name", value: "defaultMapView" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "showChords" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "showLyrics" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "showNotes" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "fontScale" },
+                            },
+                          ],
+                        },
                       },
+                      { kind: "Field", name: { kind: "Name", value: "rev" } },
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "showNotes" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "fontScale" },
+                        name: { kind: "Name", value: "updatedAt" },
                       },
                     ],
                   },
                 },
-                { kind: "Field", name: { kind: "Name", value: "rev" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
               ],
             },
           },
@@ -1924,9 +1710,33 @@ export const CreateSectionNoteDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
                 {
-                  kind: "FragmentSpread",
-                  name: { kind: "Name", value: "SectionNoteFields" },
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sectionNote" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "FragmentSpread",
+                        name: { kind: "Name", value: "SectionNoteFields" },
+                      },
+                    ],
+                  },
                 },
               ],
             },
@@ -1996,14 +1806,6 @@ export const UpdateSectionNoteDocument = {
           kind: "VariableDefinition",
           variable: {
             kind: "Variable",
-            name: { kind: "Name", value: "baseRev" },
-          },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
             name: { kind: "Name", value: "patch" },
           },
           type: {
@@ -2032,14 +1834,6 @@ export const UpdateSectionNoteDocument = {
               },
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "baseRev" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "baseRev" },
-                },
-              },
-              {
-                kind: "Argument",
                 name: { kind: "Name", value: "patch" },
                 value: {
                   kind: "Variable",
@@ -2050,39 +1844,74 @@ export const UpdateSectionNoteDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "anchor" },
+                  name: { kind: "Name", value: "errors" },
                   selectionSet: {
                     kind: "SelectionSet",
                     selections: [
-                      { kind: "Field", name: { kind: "Name", value: "type" } },
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "lineIndex" },
+                        name: { kind: "Name", value: "message" },
                       },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sectionNote" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
                       {
-                        kind: "Field",
-                        name: { kind: "Name", value: "wordOffset" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "fromLineIndex" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "toLineIndex" },
+                        kind: "FragmentSpread",
+                        name: { kind: "Name", value: "SectionNoteFields" },
                       },
                     ],
                   },
                 },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "rev" } },
               ],
             },
           },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "SectionNoteFields" },
+      typeCondition: {
+        kind: "NamedType",
+        name: { kind: "Name", value: "SectionNote" },
+      },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "versionId" } },
+          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "anchor" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
+                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "fromLineIndex" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
+              ],
+            },
+          },
+          { kind: "Field", name: { kind: "Name", value: "text" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "rev" } },
         ],
       },
     },
@@ -2107,14 +1936,6 @@ export const DeleteSectionNoteDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "baseRev" },
-          },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -2131,15 +1952,27 @@ export const DeleteSectionNoteDocument = {
                   name: { kind: "Name", value: "id" },
                 },
               },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "baseRev" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "baseRev" },
-                },
-              },
             ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+              ],
+            },
           },
         ],
       },
@@ -2471,9 +2304,33 @@ export const CreateSongDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
                 {
-                  kind: "FragmentSpread",
-                  name: { kind: "Name", value: "SongFields" },
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "song" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "FragmentSpread",
+                        name: { kind: "Name", value: "SongFields" },
+                      },
+                    ],
+                  },
                 },
               ],
             },
@@ -2562,18 +2419,58 @@ export const UpdateSongDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "title" } },
-                { kind: "Field", name: { kind: "Name", value: "artist" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "defaultVersionId" },
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
                 },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "rev" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "song" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "FragmentSpread",
+                        name: { kind: "Name", value: "SongFields" },
+                      },
+                    ],
+                  },
+                },
               ],
             },
           },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "SongFields" },
+      typeCondition: {
+        kind: "NamedType",
+        name: { kind: "Name", value: "Song" },
+      },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "title" } },
+          { kind: "Field", name: { kind: "Name", value: "artist" } },
+          { kind: "Field", name: { kind: "Name", value: "defaultVersionId" } },
+          { kind: "Field", name: { kind: "Name", value: "ownerUid" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "rev" } },
         ],
       },
     },
@@ -2595,14 +2492,6 @@ export const DeleteSongDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "baseRev" },
-          },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -2619,20 +2508,35 @@ export const DeleteSongDocument = {
                   name: { kind: "Name", value: "id" },
                 },
               },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "baseRev" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "baseRev" },
-                },
-              },
             ],
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "song" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                    ],
+                  },
+                },
               ],
             },
           },
@@ -2641,535 +2545,6 @@ export const DeleteSongDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteSongMutation, DeleteSongMutationVariables>;
-export const SyncPullDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SyncPull" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "input" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: { kind: "Name", value: "SyncPullInput" },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "syncPull" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "input" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "changes" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "entityType" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "entityId" },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "op" } },
-                      { kind: "Field", name: { kind: "Name", value: "rev" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "cursorId" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "changedAt" },
-                      },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "entities" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "songs" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "id" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "title" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "artist" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "defaultVersionId" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "createdAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "updatedAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "rev" },
-                            },
-                          ],
-                        },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "versions" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "id" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "songId" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "label" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "arrangement" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "sections" },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "id" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "name" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "chordProText",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "notes",
-                                          },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "id",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "sectionId",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "text",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "anchor",
-                                                },
-                                                selectionSet: {
-                                                  kind: "SelectionSet",
-                                                  selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "type",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "lineIndex",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "wordOffset",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "fromLineIndex",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "toLineIndex",
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "sequence" },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "sectionId",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "repeat",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "sequenceNotes",
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "reference" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "youtubeUrl" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "spotifyUrl" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "descriptionIfNoLink",
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "musicalMeta" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "originalKey",
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "root" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "mode" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "tonalQuality",
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "bpm" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "timeSignature",
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "createdAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "updatedAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "rev" },
-                            },
-                          ],
-                        },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "notes" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "id" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "versionId" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "sectionId" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "anchor" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "type" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "lineIndex" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "wordOffset" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "fromLineIndex",
-                                    },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "toLineIndex",
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "text" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "createdAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "updatedAt" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "rev" },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "nextCursor" } },
-                { kind: "Field", name: { kind: "Name", value: "hasMore" } },
-                { kind: "Field", name: { kind: "Name", value: "serverTime" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SyncPullQuery, SyncPullQueryVariables>;
-export const SyncPushDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "SyncPush" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "input" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: { kind: "Name", value: "SyncPushInput" },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "syncPush" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "input" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "applied" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "mutationId" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "status" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "entityId" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "newRev" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "reason" },
-                      },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "serverTime" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SyncPushMutation, SyncPushMutationVariables>;
 export const SongVersionDocument = {
   kind: "Document",
   definitions: [
@@ -3436,12 +2811,45 @@ export const CreateSongVersionDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "songId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "rev" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "songVersion" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "songId" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "label" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "createdAt" },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "updatedAt" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "rev" } },
+                    ],
+                  },
+                },
               ],
             },
           },
@@ -3511,10 +2919,41 @@ export const UpdateSongVersionDocument = {
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "rev" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "songVersion" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "songId" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "label" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "updatedAt" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "rev" } },
+                    ],
+                  },
+                },
               ],
             },
           },
@@ -3542,14 +2981,6 @@ export const DeleteSongVersionDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "baseRev" },
-          },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -3566,20 +2997,35 @@ export const DeleteSongVersionDocument = {
                   name: { kind: "Name", value: "id" },
                 },
               },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "baseRev" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "baseRev" },
-                },
-              },
             ],
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "ok" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "errors" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "message" },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "field" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "songVersion" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                    ],
+                  },
+                },
               ],
             },
           },

@@ -13,5 +13,5 @@ export type {
   GraphQLTraceInfo,
 } from "./graphqlClient";
 
-export { useNetworkStatus, useSyncManager } from "./networkStatus";
-export type { NetworkStatus, SyncStatus, SyncState } from "./networkStatus";
+export { useNetworkStatus } from "./networkStatus";
+export type { NetworkStatus } from "./networkStatus";

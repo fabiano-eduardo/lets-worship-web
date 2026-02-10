@@ -2,6 +2,7 @@
 // This integrates with the codegen output and TanStack Query
 
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { print } from "graphql";
 import { auth } from "@/shared/firebase";
 
 const GRAPHQL_URL =
@@ -158,16 +159,13 @@ export async function executeGraphQL<TResult, TVariables>(
         },
       ]);
     }
-    headers["Authorization"] = `Bearer ================ ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Extract query string from document
-  // TypedDocumentNode has a `loc` property with the source
-  const query = (
-    document as unknown as { loc?: { source?: { body?: string } } }
-  ).loc?.source?.body;
+  // Extract query string from document (print ensures fragments are included)
+  const query = print(document);
 
-  if (!query) {
+  if (!query.trim()) {
     throw new Error("Invalid document: no query string found");
   }
 

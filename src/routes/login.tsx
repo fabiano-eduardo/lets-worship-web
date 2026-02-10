@@ -12,7 +12,6 @@ export const Route = createRoute({
     redirect: (search.redirect as string) || undefined,
   }),
   beforeLoad: ({ context, search }) => {
-    // Redirect authenticated users to the redirect param or songs
     redirectIfAuthenticated(context.auth, search.redirect || "/songs");
   },
   component: LoginPage,

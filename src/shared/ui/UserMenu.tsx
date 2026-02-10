@@ -1,22 +1,18 @@
 // User menu component for header
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/app/auth";
-import { useSyncStatus, useSync } from "@/features/sync";
+import { useNetworkStatus } from "@/shared/api";
 import {
   IconLogOut,
   IconWifi,
   IconWifiOff,
-  IconRefresh,
-  IconLoader,
-  IconCheck,
   IconChevronDown,
-  IconAlertTriangle,
 } from "./components/Icons";
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
 
-type BadgeStatus = "offline" | "ok" | "pending" | "error";
+type BadgeStatus = "offline" | "ok";
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
@@ -60,40 +56,6 @@ function getUserInitials(
 
   const initials = parts.map((part) => part[0]?.toUpperCase()).join("");
   return initials || "U";
-}
-
-function getBadgeStatus(params: {
-  isOnline: boolean;
-  pendingMutationsCount: number;
-  hasAuthError: boolean;
-  syncStatus: string;
-}): BadgeStatus {
-  const { isOnline, pendingMutationsCount, hasAuthError, syncStatus } = params;
-
-  if (!isOnline) return "offline";
-  if (hasAuthError || syncStatus === "error") return "error";
-  if (pendingMutationsCount > 0) return "pending";
-  return "ok";
-}
-
-function formatRelativeTime(date: Date | null) {
-  if (!date) return "Nunca";
-
-  const diffMs = Date.now() - date.getTime();
-  if (diffMs < 10000) return "agora mesmo";
-
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "há menos de 1 min";
-  if (minutes < 60) return `há ${minutes} min`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours} h`;
-
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "há 1 dia";
-  if (days < 7) return `há ${days} dias`;
-
-  return date.toLocaleDateString();
 }
 
 interface UserMenuButtonProps {
@@ -161,14 +123,6 @@ interface UserMenuPanelProps {
   initials: string;
   badgeStatus: BadgeStatus;
   isOnline: boolean;
-  pendingMutationsCount: number;
-  lastSyncAt: Date | null;
-  hasAuthError: boolean;
-  syncError?: string;
-  syncStatus: string;
-  canSync: boolean;
-  isSyncing: boolean;
-  onSyncNow: () => void;
   onLogout: () => void;
 }
 
@@ -182,26 +136,9 @@ export function UserMenuPanel({
   initials,
   badgeStatus,
   isOnline,
-  pendingMutationsCount,
-  lastSyncAt,
-  hasAuthError,
-  syncError,
-  syncStatus,
-  canSync,
-  isSyncing,
-  onSyncNow,
   onLogout,
 }: UserMenuPanelProps) {
-  const syncLabel = useMemo(() => {
-    if (hasAuthError) return "Autenticação necessária";
-    if (syncStatus === "error") return "Erro de sincronização";
-    if (pendingMutationsCount > 0)
-      return `Pendente: ${pendingMutationsCount} mudanças`;
-    return "Sincronizado";
-  }, [hasAuthError, pendingMutationsCount, syncStatus]);
-
   const statusLabel = isOnline ? "Online" : "Offline";
-  const lastSyncLabel = formatRelativeTime(lastSyncAt);
 
   const panelContent = (
     <div
@@ -239,7 +176,7 @@ export function UserMenuPanel({
       <div className="user-menu__divider" />
 
       <div className="user-menu__section">
-        <div className="user-menu__section-title">Conectividade e Sync</div>
+        <div className="user-menu__section-title">Conectividade</div>
         <div className="user-menu__sync-card">
           <div className="user-menu__sync-row">
             <span
@@ -249,42 +186,11 @@ export function UserMenuPanel({
             />
             <span className="user-menu__sync-label">{statusLabel}</span>
           </div>
-          <div className="user-menu__sync-row">
-            {hasAuthError || syncStatus === "error" ? (
-              <IconAlertTriangle className="user-menu__sync-icon user-menu__sync-icon--error" size={16} />
-            ) : syncStatus === "syncing" || isSyncing ? (
-              <IconLoader
-                className="user-menu__sync-icon user-menu__sync-icon--info user-menu__sync-icon--spin"
-                size={16}
-              />
-            ) : pendingMutationsCount > 0 ? (
-              <IconRefresh className="user-menu__sync-icon user-menu__sync-icon--warning" size={16} />
-            ) : (
-              <IconCheck className="user-menu__sync-icon user-menu__sync-icon--success" size={16} />
-            )}
-            <span className="user-menu__sync-label">{syncLabel}</span>
-          </div>
-          <div className="user-menu__sync-meta">
-            Última sincronização: {lastSyncLabel}
-          </div>
-          {syncError && (
-            <div className="user-menu__sync-error user-menu__truncate">
-              {syncError}
+          {!isOnline && (
+            <div className="user-menu__sync-hint">
+              Conecte-se para acessar seus dados
             </div>
           )}
-          {!isOnline && (
-            <div className="user-menu__sync-hint">Usando dados locais</div>
-          )}
-          <div className="user-menu__sync-actions">
-            <button
-              type="button"
-              className="button button--secondary button--sm"
-              onClick={onSyncNow}
-              disabled={!canSync}
-            >
-              {isSyncing ? "Sincronizando..." : "Sincronizar agora"}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -322,15 +228,7 @@ export function UserMenuPanel({
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
-  const {
-    status: syncStatus,
-    isOnline,
-    pendingMutationsCount,
-    lastSyncAt,
-    hasAuthError,
-    syncError,
-  } = useSyncStatus();
-  const { sync, canSync, isSyncing } = useSync();
+  const { isOnline } = useNetworkStatus();
   const isDesktop = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -341,12 +239,7 @@ export function UserMenu() {
   const emailOrUid = user?.email || user?.uid || "";
   const initials = getUserInitials(user?.displayName, user?.email, user?.uid);
 
-  const badgeStatus = getBadgeStatus({
-    isOnline,
-    pendingMutationsCount,
-    hasAuthError,
-    syncStatus,
-  });
+  const badgeStatus: BadgeStatus = isOnline ? "ok" : "offline";
 
   const closeMenu = useCallback(() => {
     setIsOpen(false);
@@ -440,14 +333,6 @@ export function UserMenu() {
           initials={initials}
           badgeStatus={badgeStatus}
           isOnline={isOnline}
-          pendingMutationsCount={pendingMutationsCount}
-          lastSyncAt={lastSyncAt}
-          hasAuthError={hasAuthError}
-          syncError={syncError}
-          syncStatus={syncStatus}
-          canSync={canSync}
-          isSyncing={isSyncing}
-          onSyncNow={sync}
           onLogout={handleSignOut}
         />
       )}
@@ -457,48 +342,24 @@ export function UserMenu() {
 
 // Simple status badge for compact display
 export function ConnectionStatus() {
-  const { status: syncStatus, isOnline } = useSyncStatus();
+  const { isOnline } = useNetworkStatus();
 
-  const getColor = () => {
-    if (!isOnline) return "bg-red-500/20 text-red-400";
-    switch (syncStatus) {
-      case "syncing":
-        return "bg-indigo-500/20 text-indigo-400";
-      case "success":
-        return "bg-green-500/20 text-green-400";
-      case "error":
-        return "bg-red-500/20 text-red-400";
-      default:
-        return "bg-yellow-500/20 text-yellow-400";
-    }
-  };
+  const color = isOnline
+    ? "bg-green-500/20 text-green-400"
+    : "bg-red-500/20 text-red-400";
 
-  const getText = () => {
-    if (!isOnline) return "Offline";
-    switch (syncStatus) {
-      case "syncing":
-        return "Sincronizando";
-      case "success":
-        return "Sincronizado";
-      case "error":
-        return "Erro";
-      default:
-        return "Online";
-    }
-  };
+  const text = isOnline ? "Online" : "Offline";
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${getColor()}`}
+      className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${color}`}
     >
-      {!isOnline ? (
-        <IconWifiOff className="w-3 h-3" />
-      ) : syncStatus === "syncing" ? (
-        <IconLoader className="w-3 h-3 animate-spin" />
-      ) : (
+      {isOnline ? (
         <IconWifi className="w-3 h-3" />
+      ) : (
+        <IconWifiOff className="w-3 h-3" />
       )}
-      <span>{getText()}</span>
+      <span>{text}</span>
     </div>
   );
 }

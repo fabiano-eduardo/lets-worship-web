@@ -31,30 +31,36 @@ query SectionNotesBySection($versionId: ID!, $sectionId: ID!) {
 
 mutation CreateSectionNote($input: CreateSectionNoteInput!) {
   createSectionNote(input: $input) {
-    ...SectionNoteFields
-  }
-}
-
-mutation UpdateSectionNote(
-  $id: ID!
-  $baseRev: Int
-  $patch: UpdateSectionNoteInput!
-) {
-  updateSectionNote(id: $id, baseRev: $baseRev, patch: $patch) {
-    id
-    text
-    anchor {
-      type
-      lineIndex
-      wordOffset
-      fromLineIndex
-      toLineIndex
+    ok
+    errors {
+      message
+      field
     }
-    updatedAt
-    rev
+    sectionNote {
+      ...SectionNoteFields
+    }
   }
 }
 
-mutation DeleteSectionNote($id: ID!, $baseRev: Int) {
-  deleteSectionNote(id: $id, baseRev: $baseRev)
+mutation UpdateSectionNote($id: ID!, $patch: UpdateSectionNoteInput!) {
+  updateSectionNote(id: $id, patch: $patch) {
+    ok
+    errors {
+      message
+      field
+    }
+    sectionNote {
+      ...SectionNoteFields
+    }
+  }
+}
+
+mutation DeleteSectionNote($id: ID!) {
+  deleteSectionNote(id: $id) {
+    ok
+    errors {
+      message
+      field
+    }
+  }
 }

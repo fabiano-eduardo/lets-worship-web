@@ -17,12 +17,9 @@ import {
   IconEdit,
   IconTrash,
   IconChevronRight,
-  IconPin,
   IconStarFilled,
   IconStar,
 } from "@/shared/ui";
-import type { Song } from "@/shared/types";
-
 export function SongDetailPage() {
   const { songId } = useParams({ from: "/songs/$songId" });
   const navigate = useNavigate();
@@ -181,15 +178,9 @@ export function SongDetailPage() {
                           Padrão
                         </span>
                       )}
-                      {version.pinnedOffline && (
-                        <span className="list-card__badge list-card__badge--pinned">
-                          <IconPin size={12} />
-                          Offline
-                        </span>
-                      )}
                     </div>
                     <div className="list-card__meta">
-                      {version.musicalMeta.originalKey && (
+                      {version.musicalMeta?.originalKey && (
                         <span className="list-card__badge">
                           Tom: {version.musicalMeta.originalKey.root}
                           {version.musicalMeta.originalKey.type === "tonal"
@@ -200,12 +191,12 @@ export function SongDetailPage() {
                             : ` ${version.musicalMeta.originalKey.mode}`}
                         </span>
                       )}
-                      {version.musicalMeta.bpm && (
+                      {version.musicalMeta?.bpm && (
                         <span className="list-card__badge">
                           {version.musicalMeta.bpm} BPM
                         </span>
                       )}
-                      {version.musicalMeta.timeSignature && (
+                      {version.musicalMeta?.timeSignature && (
                         <span className="list-card__badge">
                           {version.musicalMeta.timeSignature}
                         </span>
@@ -266,7 +257,7 @@ function EditSongModal({
   isOpen,
   onClose,
 }: {
-  song: Song;
+  song: { id: string; title: string; artist?: string | null };
   isOpen: boolean;
   onClose: () => void;
 }) {

@@ -53,27 +53,48 @@ query SongVersion($id: ID!) {
 
 mutation CreateSongVersion($input: CreateSongVersionInput!) {
   createSongVersion(input: $input) {
-    id
-    songId
-    label
-    createdAt
-    updatedAt
-    rev
+    ok
+    errors {
+      message
+      field
+    }
+    songVersion {
+      id
+      songId
+      label
+      createdAt
+      updatedAt
+      rev
+    }
   }
 }
 
 mutation UpdateSongVersion($id: ID!, $input: UpdateSongVersionInput!) {
   updateSongVersion(id: $id, input: $input) {
-    id
-    label
-    updatedAt
-    rev
+    ok
+    errors {
+      message
+      field
+    }
+    songVersion {
+      id
+      songId
+      label
+      updatedAt
+      rev
+    }
   }
 }
 
-mutation DeleteSongVersion($id: ID!, $baseRev: Int) {
-  deleteSongVersion(id: $id, baseRev: $baseRev) {
-    id
-    deletedAt
+mutation DeleteSongVersion($id: ID!) {
+  deleteSongVersion(id: $id) {
+    ok
+    errors {
+      message
+      field
+    }
+    songVersion {
+      id
+    }
   }
 }
