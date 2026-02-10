@@ -61,6 +61,7 @@ import {
   VALID_TIME_SIGNATURES,
   MODAL_MODES,
 } from "@/shared/types/validation";
+import { useViewStore } from "./view-mode";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -85,8 +86,6 @@ const MODE_OPTIONS = MODAL_MODES.map((mode) => ({
   label: mode.charAt(0).toUpperCase() + mode.slice(1),
 }));
 
-type ViewMode = "view" | "edit" | "performance";
-
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export function VersionDetailPage() {
@@ -105,9 +104,9 @@ export function VersionDetailPage() {
   const { data: isOffline } = useIsOfflineAvailable(versionId);
   const downloadOffline = useDownloadOffline();
   const removeOffline = useRemoveOffline();
+  const { viewMode, setViewMode } = useViewStore();
 
   // ── View state ──────────────────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState<ViewMode>("view");
   const [lyricsScale, setLyricsScale] = useState(100);
   const [notesScale, setNotesScale] = useState(100);
   const [targetKey, setTargetKey] = useState<NoteName | null>(null);
