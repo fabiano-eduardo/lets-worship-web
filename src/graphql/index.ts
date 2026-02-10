@@ -1,25 +1,27 @@
 // GraphQL module exports
 
-// Fetcher and utilities
+// Central client
 export {
-  executeGraphQL,
-  createQueryFetcher,
-  createMutationFetcher,
-  GraphQLClientError,
-  NetworkError,
-  type GraphQLError,
+  getGraphqlSdk,
+  GraphQLRequestError,
   type GraphQLErrorCode,
-  type FetcherOptions,
-} from "./fetcher";
+  type NormalizedGraphQLError,
+  type SdkOptions,
+} from "./client";
 
-// TanStack Query hooks
+// Domain API facades
 export {
-  useGraphQLQuery,
-  useGraphQLMutation,
-  useInvalidateQueries,
-  queryKeys,
-} from "./hooks";
-
-// Generated types and documents will be re-exported when available
-// After running codegen, uncomment the following:
-// export * from "./generated/graphql";
+  listSongs,
+  getSong,
+  createSong,
+  updateSong,
+  deleteSong,
+  listSongVersions,
+  getSongVersion,
+  createSongVersion,
+  updateSongVersion,
+  deleteSongVersion,
+  getMePreferences,
+  updateMePreferences,
+  getHealth,
+} from "./api";

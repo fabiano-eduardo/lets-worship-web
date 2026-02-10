@@ -1,7 +1,7 @@
 // Offline store — Dexie database for selective offline cache
 
 import Dexie, { type Table } from "dexie";
-import type { SongVersionQuery, SongQuery } from "@/graphql/generated/graphql";
+import type { SongVersionQuery, SongQuery } from "@/graphql/generated/sdk";
 
 // ---------------------------------------------------------------------------
 // Types

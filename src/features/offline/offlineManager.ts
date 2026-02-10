@@ -5,8 +5,7 @@ import {
   type OfflineMetaEntry,
   type OfflineVersion,
 } from "./offlineStore";
-import { executeGraphQL } from "@/graphql/fetcher";
-import { SongVersionDocument, SongDocument } from "@/graphql/generated/graphql";
+import { getSongVersion, getSong } from "@/graphql/api";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -18,15 +17,11 @@ import { SongVersionDocument, SongDocument } from "@/graphql/generated/graphql";
  */
 export async function downloadVersionOffline(versionId: string): Promise<void> {
   // 1. Fetch version
-  const versionData = await executeGraphQL(SongVersionDocument, {
-    id: versionId,
-  });
-  const version = versionData.songVersion;
+  const version = await getSongVersion(versionId);
   if (!version) throw new Error("Versão não encontrada no servidor");
 
   // 2. Fetch song
-  const songData = await executeGraphQL(SongDocument, { id: version.songId });
-  const song = songData.song;
+  const song = await getSong(version.songId);
   if (!song) throw new Error("Música não encontrada no servidor");
 
   // 3. Calculate size
@@ -68,10 +63,7 @@ export async function updateVersionOffline(
     return { updated: true };
   }
 
-  const versionData = await executeGraphQL(SongVersionDocument, {
-    id: versionId,
-  });
-  const version = versionData.songVersion;
+  const version = await getSongVersion(versionId);
   if (!version) throw new Error("Versão não encontrada no servidor");
 
   if (version.updatedAt > meta.lastServerUpdatedAt) {

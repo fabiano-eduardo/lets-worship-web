@@ -26,8 +26,12 @@ const config: CodegenConfig = {
   documents: ["src/graphql/operations/**/*.graphql"],
   ignoreNoDocuments: true,
   generates: {
-    "src/graphql/generated/graphql.ts": {
-      plugins: ["typescript", "typescript-operations", "typed-document-node"],
+    "src/graphql/generated/sdk.ts": {
+      plugins: [
+        "typescript",
+        "typescript-operations",
+        "typescript-graphql-request",
+      ],
       config: {
         // Use string for scalars that don't have native TS equivalents
         scalars: {
@@ -42,12 +46,12 @@ const config: CodegenConfig = {
         enumsAsTypes: true,
         // Don't add __typename by default
         skipTypename: true,
-        // Generate both query and mutation document nodes
-        documentMode: "documentNode",
         // Make operation result types easier to use
         omitOperationSuffix: false,
         // Export fragment types
         exportFragmentSpreadSubTypes: true,
+        // Raw request mode for graphql-request
+        rawRequest: false,
       },
     },
   },

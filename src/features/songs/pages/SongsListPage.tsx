@@ -17,6 +17,7 @@ import {
 export function SongsListPage() {
   const navigate = useNavigate();
   const { data: songs, isLoading, error } = useSongs();
+
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredSongs = useMemo(() => {

@@ -92,12 +92,29 @@ O app funciona sem Firebase configurado, mas:
 | `npm run lint`             | Executa ESLint                   |
 | `npm run check`            | Build + verificação de tipos     |
 | `npm run graphql:codegen`  | Gera tipos TypeScript do GraphQL |
+| `npm run check:graphql`    | Valida SDK gerado e zero fetch   |
 | `npm run graphql:schema`   | Baixa o schema do backend        |
 | `npm run diagnose:backend` | Executa diagnóstico de conexão   |
 
 ## 🔌 GraphQL
 
 O app usa GraphQL para comunicação com o backend de sincronização.
+
+### Arquitetura
+
+O fluxo de acesso GraphQL segue a cadeia:
+
+```
+.graphql → codegen sdk.ts → client.ts → api facades → hooks
+```
+
+- **Operações** (`.graphql`): definem queries e mutations em `src/graphql/operations/`.
+- **SDK gerado** (`sdk.ts`): gerado automaticamente pelo codegen com tipos e `getSdk`.
+- **Cliente central** (`client.ts`): configura `graphql-request`, injeta auth Firebase e normaliza erros.
+- **Fachadas de domínio** (`api/*.ts`): funções puras por domínio (songs, versions, preferences, health).
+- **Hooks** (`features/*/hooks/`): usam `useQuery`/`useMutation` + fachadas.
+
+> **Regra**: não usar `fetch` para GraphQL no runtime web (`src/`). Scripts de diagnóstico/introspecção em `scripts/` são exceção.
 
 ### Configuração
 
@@ -115,10 +132,10 @@ Os tipos TypeScript são gerados automaticamente a partir do schema do backend:
 npm run graphql:codegen
 ```
 
-Isso gera `src/graphql/generated/graphql.ts` com:
+Isso gera `src/graphql/generated/sdk.ts` com:
 
 - Tipos para todas as queries e mutations
-- TypedDocumentNode para type-safety total
+- `getSdk()` para acesso tipado via `graphql-request`
 - Fragmentos reutilizáveis
 
 ### Obtendo Token de Autenticação para Codegen

@@ -30,54 +30,36 @@ O frontend usa o Firebase Auth SDK para obter um ID Token JWT fresco antes de ca
 
 ### Código do GraphQL Client
 
-Localizado em `src/shared/api/graphqlClient.ts`:
+Localizado em `src/graphql/client.ts`:
 
 ```typescript
+import { GraphQLClient } from "graphql-request";
+import { getSdk } from "./generated/sdk";
 import { auth } from "@/shared/firebase";
 
 const GRAPHQL_URL = import.meta.env.VITE_GRAPHQL_URL;
 
 // Obtém token fresco do Firebase (SDK cuida do refresh automaticamente)
-async function getIdToken(): Promise<string> {
+async function getIdToken(): Promise<string | null> {
   const currentUser = auth?.currentUser;
-  if (!currentUser) {
-    throw new AuthenticationError("User not authenticated");
-  }
-  // getIdToken(true) força refresh se necessário
+  if (!currentUser) return null;
   return currentUser.getIdToken();
 }
 
-// Executa query/mutation GraphQL
-export async function graphqlFetch<T>(
-  query: string,
-  variables?: Record<string, unknown>,
-  options: { requireAuth?: boolean } = {},
-): Promise<T> {
-  const { requireAuth = true } = options;
+// Retorna SDK tipado com auth injetado
+export function getGraphqlSdk(options?: { requireAuth?: boolean }) {
+  const requireAuth = options?.requireAuth ?? true;
+  const client = new GraphQLClient(GRAPHQL_URL);
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-
-  // Adiciona token de autenticação
-  if (requireAuth) {
-    const token = await getIdToken();
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query, variables }),
+  return getSdk(client, async (action) => {
+    const headers: Record<string, string> = {};
+    if (requireAuth) {
+      const token = await getIdToken();
+      if (!token) throw new Error("Authentication required");
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return action(headers);
   });
-
-  const result = await response.json();
-
-  if (result.errors?.length > 0) {
-    throw new GraphQLClientError(result.errors);
-  }
-
-  return result.data;
 }
 ```
 

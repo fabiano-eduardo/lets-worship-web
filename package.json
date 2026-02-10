@@ -13,6 +13,7 @@
     "graphql:codegen": "graphql-codegen --config codegen.ts",
     "graphql:codegen:watch": "graphql-codegen --config codegen.ts --watch",
     "graphql:schema": "tsx scripts/introspect-schema.ts",
+    "check:graphql": "npm run graphql:codegen && git diff --exit-code src/graphql/generated/sdk.ts && ! grep -rn 'fetch(' src/ --include='*.ts' --include='*.tsx' | grep -v 'node_modules' | grep -v 'scripts/' | grep -qi 'graphql'",
     "diagnose:backend": "tsx scripts/diagnose-backend.ts"
   },
   "dependencies": {
@@ -24,16 +25,16 @@
     "dexie": "^4.0.9",
     "dexie-react-hooks": "^1.1.7",
     "firebase": "^12.8.0",
+    "graphql-request": "^7.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^6.1.1",
-    "@graphql-codegen/typed-document-node": "^6.1.5",
     "@graphql-codegen/typescript": "^5.0.7",
+    "@graphql-codegen/typescript-graphql-request": "^6.4.0",
     "@graphql-codegen/typescript-operations": "^5.0.7",
-    "@graphql-typed-document-node/core": "^3.2.0",
     "@tanstack/router-devtools": "^1.82.1",
     "@tanstack/router-plugin": "^1.81.9",
     "@types/react": "^18.3.12",

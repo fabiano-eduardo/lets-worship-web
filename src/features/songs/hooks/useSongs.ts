@@ -1,22 +1,22 @@
-// TanStack Query hooks for Songs — Online-first via GraphQL
+// TanStack Query hooks for Songs — Online-first via GraphQL SDK
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useGraphQLQuery, useGraphQLMutation } from "@/graphql/hooks";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/app/queryClient";
 import {
-  SongsDocument,
-  SongDocument,
-  CreateSongDocument,
-  UpdateSongDocument,
-  DeleteSongDocument,
-} from "@/graphql/generated/graphql";
-import type { SongsQuery, SongQuery } from "@/graphql/generated/graphql";
+  listSongs,
+  getSong,
+  createSong,
+  updateSong,
+  deleteSong,
+} from "@/graphql/api";
+import type { SongFromList, SongDetail } from "@/graphql/api";
+import type { GraphQLRequestError } from "@/graphql/client";
 
 // ---------------------------------------------------------------------------
-// Derived types from codegen
+// Re-export derived types for backward compatibility
 // ---------------------------------------------------------------------------
-export type SongFromServer = NonNullable<SongsQuery["songs"]["songs"]>[number];
-export type SongDetailFromServer = NonNullable<SongQuery["song"]>;
+export type SongFromServer = SongFromList;
+export type SongDetailFromServer = SongDetail;
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -26,15 +26,17 @@ export type SongDetailFromServer = NonNullable<SongQuery["song"]>;
  * Hook to get all songs
  */
 export function useSongs(search?: string) {
-  const result = useGraphQLQuery(
-    queryKeys.songs.list(search ? { search } : undefined),
-    SongsDocument,
-    { search: search || undefined },
-  );
+  const result = useQuery<
+    Awaited<ReturnType<typeof listSongs>>,
+    GraphQLRequestError
+  >({
+    queryKey: queryKeys.songs.list(search ? { search } : undefined),
+    queryFn: () => listSongs({ search: search || undefined }),
+  });
 
   return {
     ...result,
-    data: result.data?.songs.songs,
+    data: result.data?.songs,
   };
 }
 
@@ -49,16 +51,18 @@ export function useSearchSongs(query: string) {
  * Hook to get a single song
  */
 export function useSong(id: string) {
-  const result = useGraphQLQuery(
-    queryKeys.songs.detail(id),
-    SongDocument,
-    { id },
-    { enabled: !!id },
-  );
+  const result = useQuery<
+    Awaited<ReturnType<typeof getSong>>,
+    GraphQLRequestError
+  >({
+    queryKey: queryKeys.songs.detail(id),
+    queryFn: () => getSong(id),
+    enabled: !!id,
+  });
 
   return {
     ...result,
-    data: result.data?.song ?? undefined,
+    data: result.data ?? undefined,
   };
 }
 
@@ -73,9 +77,14 @@ export function useSong(id: string) {
 export function useCreateSong() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(CreateSongDocument, {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof createSong>>,
+    GraphQLRequestError,
+    { title: string; artist?: string | null }
+  >({
+    mutationFn: (input) => createSong(input),
     onSuccess: (data) => {
-      if (!data.createSong.ok) return;
+      if (!data.ok) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
     },
   });
@@ -83,8 +92,7 @@ export function useCreateSong() {
   return {
     ...mutation,
     mutateAsync: async (input: { title: string; artist?: string | null }) => {
-      const result = await mutation.mutateAsync({ input });
-      const payload = result.createSong;
+      const payload = await mutation.mutateAsync(input);
       if (!payload.ok || !payload.song) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??
@@ -102,15 +110,26 @@ export function useCreateSong() {
 export function useUpdateSong() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(UpdateSongDocument, {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof updateSong>>,
+    GraphQLRequestError,
+    {
+      id: string;
+      input: {
+        title?: string;
+        artist?: string | null;
+        defaultVersionId?: string | null;
+      };
+    }
+  >({
+    mutationFn: (args) => updateSong(args.id, args.input),
     onSuccess: (data) => {
-      if (!data.updateSong.ok) return;
+      if (!data.ok) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
-      if (data.updateSong.song) {
-        queryClient.setQueryData(
-          queryKeys.songs.detail(data.updateSong.song.id),
-          { song: data.updateSong.song },
-        );
+      if (data.song) {
+        queryClient.setQueryData(queryKeys.songs.detail(data.song.id), {
+          song: data.song,
+        });
       }
     },
   });
@@ -125,11 +144,7 @@ export function useUpdateSong() {
         defaultVersionId?: string | null;
       };
     }) => {
-      const result = await mutation.mutateAsync({
-        id: args.id,
-        input: args.input,
-      });
-      const payload = result.updateSong;
+      const payload = await mutation.mutateAsync(args);
       if (!payload.ok || !payload.song) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??
@@ -147,9 +162,14 @@ export function useUpdateSong() {
 export function useDeleteSong() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(DeleteSongDocument, {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof deleteSong>>,
+    GraphQLRequestError,
+    string
+  >({
+    mutationFn: (id) => deleteSong(id),
     onSuccess: (data) => {
-      if (!data.deleteSong.ok) return;
+      if (!data.ok) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.versions.all });
     },
@@ -158,8 +178,7 @@ export function useDeleteSong() {
   return {
     ...mutation,
     mutateAsync: async (id: string) => {
-      const result = await mutation.mutateAsync({ id });
-      const payload = result.deleteSong;
+      const payload = await mutation.mutateAsync(id);
       if (!payload.ok) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??

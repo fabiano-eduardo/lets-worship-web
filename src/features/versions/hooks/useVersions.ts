@@ -1,19 +1,21 @@
-// TanStack Query hooks for Versions — Online-first via GraphQL
+// TanStack Query hooks for Versions — Online-first via GraphQL SDK
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useGraphQLQuery, useGraphQLMutation } from "@/graphql/hooks";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/app/queryClient";
 import {
-  SongVersionsDocument,
-  SongVersionDocument,
-  CreateSongVersionDocument,
-  UpdateSongVersionDocument,
-  DeleteSongVersionDocument,
-} from "@/graphql/generated/graphql";
+  listSongVersions,
+  getSongVersion,
+  createSongVersion,
+  updateSongVersion,
+  deleteSongVersion,
+} from "@/graphql/api";
+import type { VersionListItem, VersionDetail } from "@/graphql/api";
+import type { GraphQLRequestError } from "@/graphql/client";
 import type {
-  SongVersionsQuery,
-  SongVersionQuery,
-} from "@/graphql/generated/graphql";
+  CreateSongVersionInput,
+  UpdateSongVersionInput,
+  MusicalMode,
+} from "@/graphql/generated/sdk";
 import type {
   ArrangementBlock,
   KeySignature,
@@ -23,10 +25,9 @@ import type {
 } from "@/shared/types";
 
 // ---------------------------------------------------------------------------
-// Derived types from codegen
+// Re-export derived types for backward compatibility
 // ---------------------------------------------------------------------------
-export type VersionListItem = SongVersionsQuery["songVersions"][number];
-export type VersionDetail = NonNullable<SongVersionQuery["songVersion"]>;
+export type { VersionListItem, VersionDetail };
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -36,16 +37,18 @@ export type VersionDetail = NonNullable<SongVersionQuery["songVersion"]>;
  * Hook to get all versions for a song
  */
 export function useVersions(songId: string) {
-  const result = useGraphQLQuery(
-    queryKeys.versions.bySong(songId),
-    SongVersionsDocument,
-    { songId },
-    { enabled: !!songId },
-  );
+  const result = useQuery<
+    Awaited<ReturnType<typeof listSongVersions>>,
+    GraphQLRequestError
+  >({
+    queryKey: queryKeys.versions.bySong(songId),
+    queryFn: () => listSongVersions(songId),
+    enabled: !!songId,
+  });
 
   return {
     ...result,
-    data: result.data?.songVersions,
+    data: result.data,
   };
 }
 
@@ -53,16 +56,18 @@ export function useVersions(songId: string) {
  * Hook to get a single version (full detail)
  */
 export function useVersion(id: string) {
-  const result = useGraphQLQuery(
-    queryKeys.versions.detail(id),
-    SongVersionDocument,
-    { id },
-    { enabled: !!id },
-  );
+  const result = useQuery<
+    Awaited<ReturnType<typeof getSongVersion>>,
+    GraphQLRequestError
+  >({
+    queryKey: queryKeys.versions.detail(id),
+    queryFn: () => getSongVersion(id),
+    enabled: !!id,
+  });
 
   return {
     ...result,
-    data: result.data?.songVersion ?? undefined,
+    data: result.data ?? undefined,
   };
 }
 
@@ -76,29 +81,19 @@ export function useVersion(id: string) {
 export function useCreateVersion() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(CreateSongVersionDocument, {
-    onSuccess: (data) => {
-      if (!data.createSongVersion.ok) return;
-      const sv = data.createSongVersion.songVersion;
-      if (sv) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.versions.bySong(sv.songId),
-        });
-        queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
-      }
-    },
-  });
-
-  return {
-    ...mutation,
-    mutateAsync: async (input: {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof createSongVersion>>,
+    GraphQLRequestError,
+    {
       songId: string;
       label: string;
       reference?: VersionReference;
       musicalMeta?: MusicalMeta;
       arrangement?: VersionArrangement;
-    }) => {
-      const gqlInput = {
+    }
+  >({
+    mutationFn: (input) => {
+      const gqlInput: CreateSongVersionInput = {
         songId: input.songId,
         label: input.label,
         reference: input.reference
@@ -122,8 +117,30 @@ export function useCreateVersion() {
           ? mapArrangementToInput(input.arrangement)
           : undefined,
       };
-      const result = await mutation.mutateAsync({ input: gqlInput });
-      const payload = result.createSongVersion;
+      return createSongVersion(gqlInput);
+    },
+    onSuccess: (data) => {
+      if (!data.ok) return;
+      const sv = data.songVersion;
+      if (sv) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.versions.bySong(sv.songId),
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
+      }
+    },
+  });
+
+  return {
+    ...mutation,
+    mutateAsync: async (input: {
+      songId: string;
+      label: string;
+      reference?: VersionReference;
+      musicalMeta?: MusicalMeta;
+      arrangement?: VersionArrangement;
+    }) => {
+      const payload = await mutation.mutateAsync(input);
       if (!payload.ok || !payload.songVersion) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??
@@ -141,10 +158,47 @@ export function useCreateVersion() {
 export function useUpdateVersion() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(UpdateSongVersionDocument, {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof updateSongVersion>>,
+    GraphQLRequestError,
+    {
+      id: string;
+      input: {
+        label?: string;
+        reference?: VersionReference;
+        musicalMeta?: MusicalMeta;
+        arrangement?: VersionArrangement;
+      };
+    }
+  >({
+    mutationFn: (args) => {
+      const inp = args.input;
+      const gqlInput: UpdateSongVersionInput = {};
+      if (inp.label !== undefined) gqlInput.label = inp.label;
+      if (inp.reference) {
+        gqlInput.reference = {
+          youtubeUrl: inp.reference.youtubeUrl || undefined,
+          spotifyUrl: inp.reference.spotifyUrl || undefined,
+          descriptionIfNoLink: inp.reference.descriptionIfNoLink || undefined,
+        };
+      }
+      if (inp.musicalMeta) {
+        gqlInput.musicalMeta = {
+          bpm: inp.musicalMeta.bpm,
+          timeSignature: inp.musicalMeta.timeSignature,
+          originalKey: inp.musicalMeta.originalKey
+            ? mapKeySignatureToInput(inp.musicalMeta.originalKey)
+            : undefined,
+        };
+      }
+      if (inp.arrangement) {
+        gqlInput.arrangement = mapArrangementToInput(inp.arrangement);
+      }
+      return updateSongVersion(args.id, gqlInput);
+    },
     onSuccess: (data) => {
-      if (!data.updateSongVersion.ok) return;
-      const sv = data.updateSongVersion.songVersion;
+      if (!data.ok) return;
+      const sv = data.songVersion;
       if (sv) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.versions.bySong(sv.songId),
@@ -167,33 +221,7 @@ export function useUpdateVersion() {
         arrangement?: VersionArrangement;
       };
     }) => {
-      const inp = args.input;
-      const gqlInput: Record<string, unknown> = {};
-      if (inp.label !== undefined) gqlInput.label = inp.label;
-      if (inp.reference) {
-        gqlInput.reference = {
-          youtubeUrl: inp.reference.youtubeUrl || undefined,
-          spotifyUrl: inp.reference.spotifyUrl || undefined,
-          descriptionIfNoLink: inp.reference.descriptionIfNoLink || undefined,
-        };
-      }
-      if (inp.musicalMeta) {
-        gqlInput.musicalMeta = {
-          bpm: inp.musicalMeta.bpm,
-          timeSignature: inp.musicalMeta.timeSignature,
-          originalKey: inp.musicalMeta.originalKey
-            ? mapKeySignatureToInput(inp.musicalMeta.originalKey)
-            : undefined,
-        };
-      }
-      if (inp.arrangement) {
-        gqlInput.arrangement = mapArrangementToInput(inp.arrangement);
-      }
-      const result = await mutation.mutateAsync({
-        id: args.id,
-        input: gqlInput,
-      });
-      const payload = result.updateSongVersion;
+      const payload = await mutation.mutateAsync(args);
       if (!payload.ok || !payload.songVersion) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??
@@ -211,9 +239,14 @@ export function useUpdateVersion() {
 export function useDeleteVersion() {
   const queryClient = useQueryClient();
 
-  const mutation = useGraphQLMutation(DeleteSongVersionDocument, {
+  const mutation = useMutation<
+    Awaited<ReturnType<typeof deleteSongVersion>>,
+    GraphQLRequestError,
+    string
+  >({
+    mutationFn: (id) => deleteSongVersion(id),
     onSuccess: (data) => {
-      if (!data.deleteSongVersion.ok) return;
+      if (!data.ok) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.versions.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.songs.all });
     },
@@ -222,8 +255,7 @@ export function useDeleteVersion() {
   return {
     ...mutation,
     mutateAsync: async (id: string) => {
-      const result = await mutation.mutateAsync({ id });
-      const payload = result.deleteSongVersion;
+      const payload = await mutation.mutateAsync(id);
       if (!payload.ok) {
         const msg =
           payload.errors?.map((e) => e.message).join(", ") ??
@@ -249,7 +281,7 @@ function mapKeySignatureToInput(key: KeySignature) {
   return {
     type: "modal" as const,
     root: key.root,
-    mode: key.mode.toUpperCase() as import("@/graphql/generated/graphql").MusicalMode,
+    mode: key.mode.toUpperCase() as MusicalMode,
   };
 }
 
