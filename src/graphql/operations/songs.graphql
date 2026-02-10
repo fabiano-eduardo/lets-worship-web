@@ -38,27 +38,12 @@ fragment VersionFields on SongVersion {
   songId
   label
   arrangement {
-    sections {
+    blocks {
       id
-      name
-      chordProText
-      notes {
-        id
-        sectionId
-        text
-        anchor {
-          type
-          lineIndex
-          wordOffset
-          fromLineIndex
-          toLineIndex
-        }
-      }
-    }
-    sequence {
-      sectionId
+      label
+      content
+      order
       repeat
-      sequenceNotes
     }
   }
   reference {

@@ -13,9 +13,9 @@ import {
 import type {
   SongVersionsQuery,
   SongVersionQuery,
-  AnchorType,
 } from "@/graphql/generated/graphql";
 import type {
+  ArrangementBlock,
   KeySignature,
   MusicalMeta,
   VersionArrangement,
@@ -119,30 +119,7 @@ export function useCreateVersion() {
             }
           : undefined,
         arrangement: input.arrangement
-          ? {
-              sections: input.arrangement.sections.map((s) => ({
-                id: s.id,
-                name: s.name,
-                chordProText: s.chordProText,
-                notes: s.notes.map((n) => ({
-                  id: n.id,
-                  sectionId: n.sectionId,
-                  text: n.text,
-                  anchor: {
-                    type: n.anchor.type.toUpperCase() as AnchorType,
-                    lineIndex: n.anchor.lineIndex,
-                    wordOffset: n.anchor.wordOffset,
-                    fromLineIndex: n.anchor.fromLineIndex,
-                    toLineIndex: n.anchor.toLineIndex,
-                  },
-                })),
-              })),
-              sequence: input.arrangement.sequence.map((s) => ({
-                sectionId: s.sectionId,
-                repeat: s.repeat,
-                sequenceNotes: s.sequenceNotes,
-              })),
-            }
+          ? mapArrangementToInput(input.arrangement)
           : undefined,
       };
       const result = await mutation.mutateAsync({ input: gqlInput });
@@ -210,30 +187,7 @@ export function useUpdateVersion() {
         };
       }
       if (inp.arrangement) {
-        gqlInput.arrangement = {
-          sections: inp.arrangement.sections.map((s) => ({
-            id: s.id,
-            name: s.name,
-            chordProText: s.chordProText,
-            notes: s.notes.map((n) => ({
-              id: n.id,
-              sectionId: n.sectionId,
-              text: n.text,
-              anchor: {
-                type: n.anchor.type.toUpperCase() as AnchorType,
-                lineIndex: n.anchor.lineIndex,
-                wordOffset: n.anchor.wordOffset,
-                fromLineIndex: n.anchor.fromLineIndex,
-                toLineIndex: n.anchor.toLineIndex,
-              },
-            })),
-          })),
-          sequence: inp.arrangement.sequence.map((s) => ({
-            sectionId: s.sectionId,
-            repeat: s.repeat,
-            sequenceNotes: s.sequenceNotes,
-          })),
-        };
+        gqlInput.arrangement = mapArrangementToInput(inp.arrangement);
       }
       const result = await mutation.mutateAsync({
         id: args.id,
@@ -296,5 +250,19 @@ function mapKeySignatureToInput(key: KeySignature) {
     type: "modal" as const,
     root: key.root,
     mode: key.mode.toUpperCase() as import("@/graphql/generated/graphql").MusicalMode,
+  };
+}
+
+function mapArrangementToInput(arrangement: VersionArrangement) {
+  return {
+    blocks: arrangement.blocks.map(
+      (block: ArrangementBlock, index: number) => ({
+        id: block.id,
+        label: block.label || undefined,
+        content: block.content,
+        order: block.order ?? index,
+        repeat: block.repeat ?? undefined,
+      }),
+    ),
   };
 }

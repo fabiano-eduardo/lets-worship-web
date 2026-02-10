@@ -37,11 +37,6 @@ export const queryKeys = {
     bySection: (versionId: string, sectionId: string) =>
       [...queryKeys.notes.all, "bySection", versionId, sectionId] as const,
   },
-  mapItems: {
-    all: ["songMapItems"] as const,
-    byVersion: (versionId: string) =>
-      [...queryKeys.mapItems.all, "byVersion", versionId] as const,
-  },
   offline: {
     all: ["offline"] as const,
     library: () => [...queryKeys.offline.all, "library"] as const,

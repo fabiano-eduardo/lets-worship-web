@@ -1,18 +1,17 @@
 // IndexedDB database setup using Dexie — Stripped for online-first
-// Only keeps settings and songMapItems tables.
+// Only keeps settings table.
 
 import Dexie, { type Table } from "dexie";
-import type { SongMapItem, UserSettings } from "@/shared/types";
+import type { UserSettings } from "@/shared/types";
 
 export class LetsWorshipDB extends Dexie {
-  songMapItems!: Table<SongMapItem, string>;
   settings!: Table<UserSettings, string>;
 
   constructor() {
     super("LetsWorshipDB");
 
-    // Version 4: online-first schema (only local tables)
-    this.version(4).stores({
+    // Version 5: remove songMapItems (arrangementBlocks are source of truth)
+    this.version(5).stores({
       // Drop legacy tables by setting them to null
       songs: null,
       versions: null,
@@ -20,8 +19,8 @@ export class LetsWorshipDB extends Dexie {
       outbox: null,
       syncState: null,
       conflicts: null,
+      songMapItems: null,
       // Keep these
-      songMapItems: "id, songVersionId, sectionId, order, createdAt, updatedAt",
       settings: "id",
     });
   }

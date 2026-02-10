@@ -41,62 +41,19 @@ export type KeySignature =
 export type TimeSignature = "2/4" | "3/4" | "4/4" | "6/8" | "12/8";
 
 // ============================================================================
-// Section and Arrangement Types
+// Arrangement Block Types
 // ============================================================================
 
-export interface SectionNoteAnchor {
-  type: "line" | "range" | "word";
-  lineIndex?: number;
-  fromLineIndex?: number;
-  toLineIndex?: number;
-  wordOffset?: number;
-}
-
-export interface SectionNote {
+export interface ArrangementBlock {
   id: string;
-  sectionId: string;
-  anchor: SectionNoteAnchor;
-  text: string;
-}
-
-// Section note as returned from the server / used in components
-export interface SectionNoteEntity {
-  id: string;
-  versionId: string;
-  sectionId: string;
-  occurrenceId?: string | null;
-  anchor: SectionNoteAnchor;
-  text: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SectionBlock {
-  id: string;
-  name: string; // e.g., "V1", "Pré", "R", "Ponte", "Tag"
-  chordProText: string; // ChordPro-like format with [Chord] inline
-  notes: SectionNote[];
-}
-
-export interface SequenceItem {
-  sectionId: string;
-  repeat?: number; // default 1
-  sequenceNotes?: string[];
-}
-
-export interface SongMapItem {
-  id: string;
-  songVersionId: string;
-  sectionId: string;
+  label?: string | null;
+  content: string;
   order: number;
-  labelOverride?: string;
-  createdAt: string;
-  updatedAt: string;
+  repeat?: number | null;
 }
 
 export interface VersionArrangement {
-  sections: SectionBlock[];
-  sequence: SequenceItem[];
+  blocks: ArrangementBlock[];
 }
 
 // ============================================================================

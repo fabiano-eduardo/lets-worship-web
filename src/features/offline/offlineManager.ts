@@ -4,23 +4,16 @@ import {
   offlineDb,
   type OfflineMetaEntry,
   type OfflineVersion,
-  type OfflineNote,
 } from "./offlineStore";
 import { executeGraphQL } from "@/graphql/fetcher";
-import {
-  SongVersionDocument,
-  SongDocument,
-  SectionNotesDocument,
-} from "@/graphql/generated/graphql";
-import { buildMapItemsFromArrangement } from "@/shared/utils/mapItems";
-import type { SongMapItem } from "@/shared/types";
+import { SongVersionDocument, SongDocument } from "@/graphql/generated/graphql";
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Download a version + its song, notes, and map items for offline use.
+ * Download a version + its song for offline use.
  * All data is saved atomically in a single Dexie transaction.
  */
 export async function downloadVersionOffline(versionId: string): Promise<void> {
@@ -36,45 +29,10 @@ export async function downloadVersionOffline(versionId: string): Promise<void> {
   const song = songData.song;
   if (!song) throw new Error("Música não encontrada no servidor");
 
-  // 3. Fetch section notes
-  const notesData = await executeGraphQL(SectionNotesDocument, { versionId });
-  const notes: OfflineNote[] = notesData.sectionNotes ?? [];
+  // 3. Calculate size
+  const sizeBytes = new Blob([JSON.stringify({ version, song })]).size;
 
-  // 4. Generate map items
-  const mapItems: SongMapItem[] = version.arrangement
-    ? buildMapItemsFromArrangement({
-        songVersionId: version.id,
-        sections: version.arrangement.sections.map((s) => ({
-          id: s.id,
-          name: s.name,
-          chordProText: s.chordProText,
-          notes: (s.notes ?? []).map((n) => ({
-            id: n.id,
-            sectionId: n.sectionId,
-            text: n.text,
-            anchor: {
-              type: n.anchor.type as "line" | "range" | "word",
-              lineIndex: n.anchor.lineIndex ?? undefined,
-              wordOffset: n.anchor.wordOffset ?? undefined,
-              fromLineIndex: n.anchor.fromLineIndex ?? undefined,
-              toLineIndex: n.anchor.toLineIndex ?? undefined,
-            },
-          })),
-        })),
-        sequence: version.arrangement.sequence.map((s) => ({
-          sectionId: s.sectionId,
-          repeat: s.repeat ?? undefined,
-          sequenceNotes: s.sequenceNotes ?? undefined,
-        })),
-      })
-    : [];
-
-  // 5. Calculate size
-  const sizeBytes = new Blob([
-    JSON.stringify({ version, song, notes, mapItems }),
-  ]).size;
-
-  // 6. Build meta
+  // 4. Build meta
   const meta: OfflineMetaEntry = {
     versionId: version.id,
     songId: version.songId,
@@ -85,38 +43,13 @@ export async function downloadVersionOffline(versionId: string): Promise<void> {
     versionLabel: version.label,
   };
 
-  // 7. Atomic write
+  // 5. Atomic write
   await offlineDb.transaction(
     "rw",
-    [
-      offlineDb.offlineSongs,
-      offlineDb.offlineVersions,
-      offlineDb.offlineNotes,
-      offlineDb.offlineMapItems,
-      offlineDb.offlineMeta,
-    ],
+    [offlineDb.offlineSongs, offlineDb.offlineVersions, offlineDb.offlineMeta],
     async () => {
       await offlineDb.offlineSongs.put(song);
       await offlineDb.offlineVersions.put(version as OfflineVersion);
-
-      // Replace notes for this version
-      await offlineDb.offlineNotes
-        .where("versionId")
-        .equals(versionId)
-        .delete();
-      if (notes.length > 0) {
-        await offlineDb.offlineNotes.bulkPut(notes);
-      }
-
-      // Replace map items for this version
-      await offlineDb.offlineMapItems
-        .where("songVersionId")
-        .equals(versionId)
-        .delete();
-      if (mapItems.length > 0) {
-        await offlineDb.offlineMapItems.bulkPut(mapItems);
-      }
-
       await offlineDb.offlineMeta.put(meta);
     },
   );
@@ -159,23 +92,9 @@ export async function removeVersionOffline(versionId: string): Promise<void> {
 
   await offlineDb.transaction(
     "rw",
-    [
-      offlineDb.offlineSongs,
-      offlineDb.offlineVersions,
-      offlineDb.offlineNotes,
-      offlineDb.offlineMapItems,
-      offlineDb.offlineMeta,
-    ],
+    [offlineDb.offlineSongs, offlineDb.offlineVersions, offlineDb.offlineMeta],
     async () => {
       await offlineDb.offlineVersions.delete(versionId);
-      await offlineDb.offlineNotes
-        .where("versionId")
-        .equals(versionId)
-        .delete();
-      await offlineDb.offlineMapItems
-        .where("songVersionId")
-        .equals(versionId)
-        .delete();
       await offlineDb.offlineMeta.delete(versionId);
 
       // Check if other versions of same song exist offline
@@ -197,19 +116,14 @@ export async function getOfflineVersion(versionId: string) {
   const meta = await offlineDb.offlineMeta.get(versionId);
   if (!meta) return null;
 
-  const [version, song, notes, mapItems] = await Promise.all([
+  const [version, song] = await Promise.all([
     offlineDb.offlineVersions.get(versionId),
     offlineDb.offlineSongs.get(meta.songId),
-    offlineDb.offlineNotes.where("versionId").equals(versionId).toArray(),
-    offlineDb.offlineMapItems
-      .where("songVersionId")
-      .equals(versionId)
-      .toArray(),
   ]);
 
   if (!version || !song) return null;
 
-  return { version, song, notes, mapItems, meta };
+  return { version, song, meta };
 }
 
 /**

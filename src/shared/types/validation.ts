@@ -5,7 +5,7 @@ import type {
   SongVersion,
   VersionReference,
   KeySignature,
-  SectionBlock,
+  ArrangementBlock,
   VersionArrangement,
   NoteName,
   TimeSignature,
@@ -153,38 +153,25 @@ export function validateKeySignature(key: KeySignature | null): void {
 }
 
 // ============================================================================
-// Section Validation
+// Block Validation
 // ============================================================================
 
-export function validateSection(section: SectionBlock): void {
-  if (!section.name || section.name.trim().length === 0) {
-    throw new ValidationError("section.name", "O nome da seção é obrigatório");
+export function validateBlock(block: ArrangementBlock): void {
+  if (!block.content || block.content.trim().length === 0) {
+    throw new ValidationError(
+      "block.content",
+      "O conteúdo do bloco é obrigatório",
+    );
   }
 }
 
 export function validateArrangement(arrangement: VersionArrangement): void {
-  if (!arrangement.sections || !Array.isArray(arrangement.sections)) {
-    throw new ValidationError(
-      "arrangement.sections",
-      "Seções são obrigatórias",
-    );
+  if (!arrangement.blocks || !Array.isArray(arrangement.blocks)) {
+    throw new ValidationError("arrangement.blocks", "Blocos são obrigatórios");
   }
 
-  for (const section of arrangement.sections) {
-    validateSection(section);
-  }
-
-  // Validate sequence references
-  if (arrangement.sequence) {
-    const sectionIds = new Set(arrangement.sections.map((s) => s.id));
-    for (const item of arrangement.sequence) {
-      if (!sectionIds.has(item.sectionId)) {
-        throw new ValidationError(
-          "arrangement.sequence",
-          `Seção referenciada não existe: ${item.sectionId}`,
-        );
-      }
-    }
+  for (const block of arrangement.blocks) {
+    validateBlock(block);
   }
 }
 

@@ -5,7 +5,6 @@ export {
   type OfflineMetaEntry,
   type OfflineSong,
   type OfflineVersion,
-  type OfflineNote,
 } from "./offlineStore";
 
 export {

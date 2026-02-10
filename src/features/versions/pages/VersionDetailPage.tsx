@@ -1,4 +1,4 @@
-// Version detail/editor page
+// Version detail/editor page — ArrangementBlocks model
 
 import {
   useState,
@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useParams, useNavigate, useLocation } from "@tanstack/react-router";
 import { useSong } from "@/features/songs/hooks/useSongs";
-import { useSectionNotes } from "@/features/songs/hooks/useSectionNotes";
 import {
   useVersion,
   useUpdateVersion,
@@ -21,10 +20,6 @@ import {
   useDownloadOffline,
   useRemoveOffline,
 } from "@/features/offline";
-import {
-  useSongMapItems,
-  useReplaceSongMapItems,
-} from "../hooks/useSongMapItems";
 import {
   PageHeader,
   Button,
@@ -49,33 +44,25 @@ import {
   IconEyeOff,
   IconX,
 } from "@/shared/ui";
-import { SectionDisplay, SequenceDisplay } from "../components/ChordRenderer";
+import { ArrangementBlocksEditor } from "../components/ArrangementBlocksEditor";
+import { SongContentRenderer } from "../components/SongContentRenderer";
 import { TransposeControls } from "../components/TransposeControls";
-import { SectionEditor } from "../components/SectionEditor";
-import { SectionNoteEditor } from "../components/SectionNoteEditor";
-import { SectionNotesDisplay } from "../components/SectionNotesDisplay";
+import { validateAllBlocks } from "../utils/validateDelimiters";
 import type {
+  ArrangementBlock,
   NoteName,
   KeySignature,
   TimeSignature,
   TonalQuality,
   ModalMode,
-  SectionBlock,
-  SongMapItem,
-  SectionNoteEntity,
 } from "@/shared/types";
-import {
-  buildMapItemsFromArrangement,
-  buildSequenceFromMapItems,
-  groupMapItems,
-  sortMapItems,
-} from "@/shared/utils/mapItems";
-import { buildExecutionPlan } from "@/shared/utils/executionPlan";
 import {
   VALID_NOTE_NAMES,
   VALID_TIME_SIGNATURES,
   MODAL_MODES,
 } from "@/shared/types/validation";
+
+// ─── Constants ──────────────────────────────────────────────────────────────
 
 const NOTE_OPTIONS = VALID_NOTE_NAMES.map((note) => ({
   value: note,
@@ -100,6 +87,8 @@ const MODE_OPTIONS = MODAL_MODES.map((mode) => ({
 
 type ViewMode = "view" | "edit" | "performance";
 
+// ─── Main component ─────────────────────────────────────────────────────────
+
 export function VersionDetailPage() {
   const { songId, versionId } = useParams({
     from: "/songs/$songId/versions/$versionId",
@@ -108,22 +97,19 @@ export function VersionDetailPage() {
   const location = useLocation();
   const { showToast } = useToast();
 
+  // ── Data queries ────────────────────────────────────────────────────────
   const { data: song, isLoading: songLoading } = useSong(songId);
   const { data: version, isLoading: versionLoading } = useVersion(versionId);
-  const { data: sectionNotes = [] } = useSectionNotes(versionId);
-  const { data: mapItemsData = [], isLoading: mapItemsLoading } =
-    useSongMapItems(versionId);
   const updateVersion = useUpdateVersion();
   const deleteVersion = useDeleteVersion();
   const { data: isOffline } = useIsOfflineAvailable(versionId);
   const downloadOffline = useDownloadOffline();
   const removeOffline = useRemoveOffline();
-  const replaceSongMapItems = useReplaceSongMapItems();
 
+  // ── View state ──────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>("view");
-  // Presentation scale state (percent integers)
-  const [lyricsScale, setLyricsScale] = useState<number>(100);
-  const [notesScale, setNotesScale] = useState<number>(100);
+  const [lyricsScale, setLyricsScale] = useState(100);
+  const [notesScale, setNotesScale] = useState(100);
   const [targetKey, setTargetKey] = useState<NoteName | null>(null);
   const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -134,9 +120,9 @@ export function VersionDetailPage() {
   const [showLyrics, setShowLyrics] = useState(true);
   const [showChords, setShowChords] = useState(true);
   const [showNotes, setShowNotes] = useState(true);
-  const [showSectionName, setShowSectionName] = useState(true);
+  const [showBlockLabels, setShowBlockLabels] = useState(true);
 
-  // Edit state
+  // ── Meta edit state ─────────────────────────────────────────────────────
   const [editLabel, setEditLabel] = useState("");
   const [editBpm, setEditBpm] = useState("");
   const [editTimeSignature, setEditTimeSignature] = useState<
@@ -148,43 +134,19 @@ export function VersionDetailPage() {
     useState<TonalQuality>("major");
   const [editMode, setEditMode] = useState<ModalMode>("ionian");
 
-  // Arrangement state
-  const [sections, setSections] = useState<SectionBlock[]>([]);
-  const [mapItems, setMapItems] = useState<SongMapItem[]>([]);
+  // ── Arrangement blocks state ────────────────────────────────────────────
+  const [arrangementBlocks, setArrangementBlocks] = useState<
+    ArrangementBlock[]
+  >([]);
   const [hasArrangementChanges, setHasArrangementChanges] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
-  // Helper to get notes for a specific section
-  const getNotesForSection = (sectionId: string): SectionNoteEntity[] => {
-    return sectionNotes.filter((n) => n.sectionId === sectionId);
-  };
-
-  const getNotesForStep = (
-    sectionId: string,
-    occurrenceId: string,
-  ): SectionNoteEntity[] => {
-    return sectionNotes.filter(
-      (n) =>
-        n.sectionId === sectionId &&
-        ((n as SectionNoteEntity).occurrenceId == null ||
-          (n as SectionNoteEntity).occurrenceId === occurrenceId),
-    );
-  };
-
-  // Helper to check anchor position (for filtering)
-  const getAnchorPosition = (anchor: {
-    type: string;
-    lineIndex?: number;
-  }): "start" | "general" | "end" => {
-    if (anchor.type === "line") {
-      if (anchor.lineIndex === 0) return "start";
-      if (anchor.lineIndex === -1) return "end";
-    }
-    return "general";
-  };
-
-  // Initialize edit state when version loads
+  // ── Initialize state when version loads ─────────────────────────────────
   useEffect(() => {
     if (!version) return;
+
     setEditLabel(version.label);
     setEditBpm(version.musicalMeta?.bpm?.toString() || "");
     setEditTimeSignature(
@@ -204,29 +166,25 @@ export function VersionDetailPage() {
       }
     }
 
-    setSections(
-      (version.arrangement?.sections ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        chordProText: s.chordProText,
-        notes: (s.notes ?? []).map((n) => ({
-          id: n.id,
-          sectionId: n.sectionId,
-          text: n.text,
-          anchor: {
-            type: n.anchor.type.toLowerCase() as "line" | "range" | "word",
-            lineIndex: n.anchor.lineIndex ?? undefined,
-            wordOffset: n.anchor.wordOffset ?? undefined,
-            fromLineIndex: n.anchor.fromLineIndex ?? undefined,
-            toLineIndex: n.anchor.toLineIndex ?? undefined,
-          },
+    // Map server blocks into local state
+    const serverBlocks = version.arrangement?.blocks ?? [];
+    setArrangementBlocks(
+      serverBlocks
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((b, i) => ({
+          id: b.id,
+          label: b.label ?? null,
+          content: b.content,
+          order: i,
+          repeat: b.repeat ?? null,
         })),
-      })),
     );
     setHasArrangementChanges(false);
-  }, [version?.id]);
+    setValidationErrors({});
+  }, [version?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load persisted presentation scales and handle ?mode=presentation
+  // ── Presentation scales persistence ─────────────────────────────────────
   useEffect(() => {
     const l = localStorage.getItem("presentation.lyricsScale");
     const n = localStorage.getItem("presentation.notesScale");
@@ -240,12 +198,11 @@ export function VersionDetailPage() {
       if (params.get("mode") === "presentation") {
         setViewMode("performance");
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist scales when changed
   useEffect(() => {
     localStorage.setItem("presentation.lyricsScale", String(lyricsScale));
   }, [lyricsScale]);
@@ -254,75 +211,11 @@ export function VersionDetailPage() {
     localStorage.setItem("presentation.notesScale", String(notesScale));
   }, [notesScale]);
 
-  useEffect(() => {
-    if (!version || mapItemsLoading || hasArrangementChanges) return;
-    const initial =
-      mapItemsData.length > 0
-        ? mapItemsData
-        : buildMapItemsFromArrangement({
-            songVersionId: version.id,
-            sections: (version.arrangement?.sections ?? []).map((s) => ({
-              id: s.id,
-              name: s.name,
-              chordProText: s.chordProText,
-              notes: (s.notes ?? []).map((n) => ({
-                id: n.id,
-                sectionId: n.sectionId,
-                text: n.text,
-                anchor: {
-                  type: n.anchor.type.toLowerCase() as
-                    | "line"
-                    | "range"
-                    | "word",
-                  lineIndex: n.anchor.lineIndex ?? undefined,
-                  wordOffset: n.anchor.wordOffset ?? undefined,
-                  fromLineIndex: n.anchor.fromLineIndex ?? undefined,
-                  toLineIndex: n.anchor.toLineIndex ?? undefined,
-                },
-              })),
-            })),
-            sequence: (version.arrangement?.sequence ?? []).map((s) => ({
-              sectionId: s.sectionId,
-              repeat: s.repeat ?? undefined,
-              sequenceNotes: s.sequenceNotes ?? undefined,
-            })),
-          });
-
-    setMapItems(sortMapItems(initial));
-
-    if (
-      mapItemsData.length === 0 &&
-      ((version.arrangement?.sections?.length ?? 0) > 0 ||
-        (version.arrangement?.sequence?.length ?? 0) > 0)
-    ) {
-      void replaceSongMapItems
-        .mutateAsync({
-          songVersionId: version.id,
-          items: initial,
-        })
-        .catch(() => {});
-    }
-  }, [version?.id, mapItemsLoading, mapItemsData, hasArrangementChanges]);
-
-  // Build sequence display data (grouped for UI)
-  const sequenceDisplayData = useMemo(() => {
-    const groups = groupMapItems(mapItems, sections);
-    return groups.map((group) => ({
-      sectionId: group.sectionId,
-      sectionName: group.labelOverride || group.sectionName || "Unknown",
-      repeat: group.items.length,
-    }));
-  }, [mapItems, sections]);
-
-  const executionSteps = useMemo(
-    () => buildExecutionPlan(sections, mapItems),
-    [sections, mapItems],
-  );
+  // ── Derived values ──────────────────────────────────────────────────────
 
   const presentationStyle = useMemo(() => {
     const sharedPx = Math.round((18 * lyricsScale) / 100);
     const notesPx = Math.round((14 * notesScale) / 100);
-
     return {
       "--presentation-lyrics-font-size": `${sharedPx}px`,
       "--presentation-chords-font-size": `${sharedPx}px`,
@@ -330,7 +223,28 @@ export function VersionDetailPage() {
     } as CSSProperties;
   }, [lyricsScale, notesScale]);
 
-  // Loading states
+  const originalKey: KeySignature | null = useMemo(() => {
+    const gqlKey = version?.musicalMeta?.originalKey;
+    if (!gqlKey) return null;
+    const root = gqlKey.root as NoteName;
+    if (gqlKey.type === "tonal") {
+      return {
+        type: "tonal" as const,
+        root,
+        tonalQuality: (gqlKey.tonalQuality ?? "major") as TonalQuality,
+      };
+    }
+    return {
+      type: "modal" as const,
+      root,
+      mode: (gqlKey.mode?.toLowerCase() ?? "ionian") as ModalMode,
+    };
+  }, [version?.musicalMeta?.originalKey]);
+
+  const effectiveTargetKey = targetKey || originalKey?.root || null;
+
+  // ── Loading / error states ──────────────────────────────────────────────
+
   if (songLoading || versionLoading) {
     return (
       <>
@@ -359,6 +273,8 @@ export function VersionDetailPage() {
     );
   }
 
+  // ── Handlers ────────────────────────────────────────────────────────────
+
   const handleTogglePin = async () => {
     try {
       if (isOffline) {
@@ -373,20 +289,40 @@ export function VersionDetailPage() {
     }
   };
 
+  const handleBlocksChange = (blocks: ArrangementBlock[]) => {
+    setArrangementBlocks(blocks);
+    setHasArrangementChanges(true);
+    // Clear validation errors on change
+    setValidationErrors({});
+  };
+
   const handleSaveArrangement = async () => {
+    // Validate delimiters before saving
+    const errors = validateAllBlocks(arrangementBlocks);
+    if (errors.length > 0) {
+      const errorMap: Record<string, string> = {};
+      for (const err of errors) {
+        errorMap[err.blockId] = err.message;
+      }
+      setValidationErrors(errorMap);
+      showToast("error", "Corrija os erros nos blocos antes de salvar");
+      return;
+    }
+
     try {
-      const sequence = buildSequenceFromMapItems(mapItems);
       await updateVersion.mutateAsync({
         id: version.id,
         input: {
-          arrangement: { sections, sequence },
+          arrangement: {
+            blocks: arrangementBlocks.map((b, i) => ({
+              ...b,
+              order: i,
+            })),
+          },
         },
       });
-      await replaceSongMapItems.mutateAsync({
-        songVersionId: version.id,
-        items: mapItems,
-      });
       setHasArrangementChanges(false);
+      setValidationErrors({});
       showToast("success", "Arranjo salvo!");
     } catch {
       showToast("error", "Erro ao salvar");
@@ -394,16 +330,16 @@ export function VersionDetailPage() {
   };
 
   const handleSaveMeta = async () => {
-    let originalKey: KeySignature | null = null;
+    let key: KeySignature | null = null;
     if (editKeyRoot) {
       if (editKeyType === "tonal") {
-        originalKey = {
+        key = {
           type: "tonal",
           root: editKeyRoot,
           tonalQuality: editTonalQuality,
         };
       } else {
-        originalKey = { type: "modal", root: editKeyRoot, mode: editMode };
+        key = { type: "modal", root: editKeyRoot, mode: editMode };
       }
     }
 
@@ -415,7 +351,7 @@ export function VersionDetailPage() {
           musicalMeta: {
             bpm: editBpm ? parseInt(editBpm, 10) : null,
             timeSignature: editTimeSignature || null,
-            originalKey,
+            originalKey: key,
           },
         },
       });
@@ -436,45 +372,15 @@ export function VersionDetailPage() {
     }
   };
 
-  const handleSectionsChange = (newSections: SectionBlock[]) => {
-    setSections(newSections);
-    setHasArrangementChanges(true);
-  };
+  // ── Performance mode ────────────────────────────────────────────────────
 
-  const handleMapItemsChange = (newMapItems: SongMapItem[]) => {
-    setMapItems(newMapItems);
-    setHasArrangementChanges(true);
-  };
-
-  const originalKey: KeySignature | null = (() => {
-    const gqlKey = version.musicalMeta?.originalKey;
-    if (!gqlKey) return null;
-    const root = gqlKey.root as NoteName;
-    if (gqlKey.type === "tonal") {
-      return {
-        type: "tonal" as const,
-        root,
-        tonalQuality: (gqlKey.tonalQuality ?? "major") as TonalQuality,
-      };
-    }
-    return {
-      type: "modal" as const,
-      root,
-      mode: (gqlKey.mode?.toLowerCase() ?? "ionian") as ModalMode,
-    };
-  })();
-  const effectiveTargetKey = targetKey || originalKey?.root || null;
-
-  // Performance mode
   if (viewMode === "performance") {
     return (
       <div className="performance-mode" style={presentationStyle}>
         <div className="flex items-center justify-between mb-4 px-4">
           <div>
             <h1
-              style={{
-                color: "white",
-              }}
+              style={{ color: "white" }}
               className="text-xl font-bold performance-mode__title"
             >
               {song.title}
@@ -497,7 +403,6 @@ export function VersionDetailPage() {
             <Button
               variant="ghost"
               onClick={() => {
-                // exit presentation mode => navigate back to non-query URL
                 setViewMode("view");
                 setIsSettingsOpen(false);
                 navigate({ to: `/songs/${songId}/versions/${versionId}` });
@@ -509,7 +414,7 @@ export function VersionDetailPage() {
           </div>
         </div>
 
-        {/* Visibility toggles in performance mode */}
+        {/* Visibility toggles */}
         <div className="flex gap-2 mb-4 px-4 flex-wrap">
           <Button
             variant={showLyrics ? "primary" : "secondary"}
@@ -535,14 +440,13 @@ export function VersionDetailPage() {
             {showNotes ? <IconEye size={14} /> : <IconEyeOff size={14} />}
             Notas
           </Button>
-
           <Button
-            variant={showSectionName ? "primary" : "secondary"}
+            variant={showBlockLabels ? "primary" : "secondary"}
             size="sm"
-            onClick={() => setShowSectionName(!showSectionName)}
+            onClick={() => setShowBlockLabels(!showBlockLabels)}
           >
-            {showSectionName ? <IconEye size={14} /> : <IconEyeOff size={14} />}
-            Seções
+            {showBlockLabels ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            Blocos
           </Button>
         </div>
 
@@ -562,55 +466,43 @@ export function VersionDetailPage() {
           lyricsScale={lyricsScale}
           notesScale={notesScale}
           onClose={() => setIsSettingsOpen(false)}
-          onLyricsChange={(value) => setLyricsScale(value)}
-          onNotesChange={(value) => setNotesScale(value)}
+          onLyricsChange={setLyricsScale}
+          onNotesChange={setNotesScale}
           onReset={() => {
             setLyricsScale(100);
             setNotesScale(100);
           }}
         />
 
-        <SequenceDisplay sequence={sequenceDisplayData} />
-
+        {/* Linear block rendering */}
         <div className="px-4">
-          {executionSteps.map((step) => {
-            const section = step.section;
-            const stepNotes = getNotesForStep(step.sectionId, step.id);
-
-            return (
-              <div key={step.id}>
-                {/* Start notes */}
-                {showNotes && (
-                  <SectionNotesDisplay notes={stepNotes} filter="start" />
-                )}
-                <SectionDisplay
-                  name={step.displayName}
-                  chordProText={section?.chordProText || ""}
-                  notes={showNotes ? section?.notes || [] : []}
+          {arrangementBlocks.map((block, i) => (
+            <div key={block.id} className="section-display">
+              {showBlockLabels && (block.label?.trim() || `Bloco ${i + 1}`) && (
+                <div className="section-display__header">
+                  <span className="section-display__name">
+                    {block.label?.trim() || `Bloco ${i + 1}`}
+                  </span>
+                </div>
+              )}
+              <div className="section-display__content">
+                <SongContentRenderer
+                  content={block.content}
                   originalKey={originalKey?.root}
                   targetKey={effectiveTargetKey || undefined}
-                  fontSize="xlarge"
                   showLyrics={showLyrics}
                   showChords={showChords}
-                  showSectionName={showSectionName}
+                  showNotes={showNotes}
                 />
-                {/* General and end notes */}
-                {showNotes && (
-                  <SectionNotesDisplay
-                    notes={stepNotes.filter((n) => {
-                      const pos = getAnchorPosition(n.anchor);
-                      return pos === "general" || pos === "end";
-                    })}
-                  />
-                )}
-                {/* Section note editor is not shown in performance mode */}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
     );
   }
+
+  // ── Normal view / edit mode ─────────────────────────────────────────────
 
   return (
     <>
@@ -657,7 +549,7 @@ export function VersionDetailPage() {
           Música: <strong className="text-primary">{song.title}</strong>
         </p>
 
-        {/* Meta info */}
+        {/* Meta info card */}
         <div className="card p-4 mb-6">
           <div className="flex flex-wrap gap-4">
             {version.musicalMeta?.originalKey && (
@@ -728,7 +620,7 @@ export function VersionDetailPage() {
           )}
         </div>
 
-        {/* View/Edit toggle */}
+        {/* View / Edit / Presentation toggle */}
         <div className="flex gap-2 mb-4">
           <Button
             variant={viewMode === "view" ? "primary" : "secondary"}
@@ -751,7 +643,6 @@ export function VersionDetailPage() {
             variant="secondary"
             size="sm"
             onClick={() => {
-              // enter presentation via query param so Layout can hide bottom-nav
               setViewMode("performance");
               navigate({
                 to: `/songs/${songId}/versions/${versionId}?mode=presentation`,
@@ -763,7 +654,7 @@ export function VersionDetailPage() {
           </Button>
         </div>
 
-        {/* Transposition controls */}
+        {/* Transposition controls (view mode only) */}
         {originalKey && viewMode === "view" && (
           <TransposeControls
             originalKey={originalKey}
@@ -775,14 +666,10 @@ export function VersionDetailPage() {
         {/* Content based on mode */}
         {viewMode === "edit" ? (
           <>
-            <SectionEditor
-              sections={sections}
-              mapItems={mapItems}
-              songVersionId={version.id}
-              onSectionsChange={handleSectionsChange}
-              onMapItemsChange={handleMapItemsChange}
-              originalKey={originalKey?.root}
-              targetKey={effectiveTargetKey || undefined}
+            <ArrangementBlocksEditor
+              blocks={arrangementBlocks}
+              onChange={handleBlocksChange}
+              validationErrors={validationErrors}
             />
 
             {hasArrangementChanges && (
@@ -799,14 +686,10 @@ export function VersionDetailPage() {
           </>
         ) : (
           <>
-            {/* Sequence display */}
-            <SequenceDisplay sequence={sequenceDisplayData} />
-
-            {/* Sections display */}
-            {executionSteps.length === 0 ? (
+            {arrangementBlocks.length === 0 ? (
               <EmptyState
-                title="Nenhuma seção"
-                description="Adicione seções no modo de edição"
+                title="Nenhum bloco"
+                description="Adicione blocos no modo de edição"
                 action={
                   <Button onClick={() => setViewMode("edit")}>
                     <IconEdit size={20} />
@@ -815,36 +698,24 @@ export function VersionDetailPage() {
                 }
               />
             ) : (
-              executionSteps.map((step) => {
-                const section = step.section;
-                const sectionNotesForSection = getNotesForSection(
-                  step.sectionId,
-                );
-                const stepNotes = getNotesForStep(step.sectionId, step.id);
-
-                return (
-                  <div key={step.id}>
-                    <SectionDisplay
-                      name={step.displayName}
-                      chordProText={section?.chordProText || ""}
-                      notes={section?.notes || []}
+              arrangementBlocks.map((block) => (
+                <div key={block.id} className="section-display">
+                  {block.label?.trim() && (
+                    <div className="section-display__header">
+                      <span className="section-display__name">
+                        {block.label.trim()}
+                      </span>
+                    </div>
+                  )}
+                  <div className="section-display__content">
+                    <SongContentRenderer
+                      content={block.content}
                       originalKey={originalKey?.root}
                       targetKey={effectiveTargetKey || undefined}
                     />
-                    {/* Section notes display */}
-                    {stepNotes.length > 0 && (
-                      <SectionNotesDisplay notes={stepNotes} />
-                    )}
-                    {/* Section note editor */}
-                    <SectionNoteEditor
-                      versionId={versionId}
-                      sectionId={step.sectionId}
-                      sectionNotes={sectionNotesForSection}
-                      occurrenceId={step.id}
-                    />
                   </div>
-                );
-              })
+                </div>
+              ))
             )}
           </>
         )}
@@ -958,6 +829,8 @@ export function VersionDetailPage() {
     </>
   );
 }
+
+// ─── Presentation Settings Panel (kept from original) ───────────────────────
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 768px)";
 

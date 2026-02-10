@@ -28,45 +28,28 @@ export type Scalars = {
   Float: { input: number; output: number };
 };
 
-export type Anchor = {
-  /** Start line for type=range */
-  fromLineIndex?: Maybe<Scalars["Int"]["output"]>;
-  /** Line index for type=line or type=word */
-  lineIndex?: Maybe<Scalars["Int"]["output"]>;
-  /** End line for type=range */
-  toLineIndex?: Maybe<Scalars["Int"]["output"]>;
-  type: AnchorType;
-  /** Word offset within line for type=word */
-  wordOffset?: Maybe<Scalars["Int"]["output"]>;
-};
-
-export type AnchorInput = {
-  fromLineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  lineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  toLineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  type: AnchorType;
-  wordOffset?: InputMaybe<Scalars["Int"]["input"]>;
-};
-
-/** Type of note anchor */
-export type AnchorType = "LINE" | "RANGE" | "WORD";
-
 export type Arrangement = {
-  sections: Array<SectionBlock>;
-  sequence: Array<SequenceItem>;
+  blocks: Array<ArrangementBlock>;
+};
+
+export type ArrangementBlock = {
+  content: Scalars["String"]["output"];
+  id: Scalars["String"]["output"];
+  label?: Maybe<Scalars["String"]["output"]>;
+  order: Scalars["Int"]["output"];
+  repeat?: Maybe<Scalars["Int"]["output"]>;
+};
+
+export type ArrangementBlockInput = {
+  content: Scalars["String"]["input"];
+  id: Scalars["String"]["input"];
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  order: Scalars["Int"]["input"];
+  repeat?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 export type ArrangementInput = {
-  sections: Array<SectionBlockInput>;
-  sequence: Array<SequenceItemInput>;
-};
-
-export type CreateSectionNoteInput = {
-  anchor: AnchorInput;
-  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
-  sectionId: Scalars["String"]["input"];
-  text: Scalars["String"]["input"];
-  versionId: Scalars["String"]["input"];
+  blocks: Array<ArrangementBlockInput>;
 };
 
 export type CreateSongInput = {
@@ -86,20 +69,6 @@ export type CreateSongVersionInput = {
 export type DeletePayload = {
   errors?: Maybe<Array<MutationError>>;
   ok: Scalars["Boolean"]["output"];
-};
-
-export type EmbeddedSectionNote = {
-  anchor: LegacyNoteAnchor;
-  id: Scalars["String"]["output"];
-  sectionId: Scalars["String"]["output"];
-  text: Scalars["String"]["output"];
-};
-
-export type EmbeddedSectionNoteInput = {
-  anchor: LegacyNoteAnchorInput;
-  id: Scalars["String"]["input"];
-  sectionId: Scalars["String"]["input"];
-  text: Scalars["String"]["input"];
 };
 
 export type HealthStatus = {
@@ -124,25 +93,6 @@ export type KeySignatureInput = {
 
 /** Type of musical key signature */
 export type KeyType = "modal" | "tonal";
-
-/** Type of note anchor (legacy) */
-export type LegacyAnchorType = "LINE" | "RANGE" | "WORD";
-
-export type LegacyNoteAnchor = {
-  fromLineIndex?: Maybe<Scalars["Int"]["output"]>;
-  lineIndex?: Maybe<Scalars["Int"]["output"]>;
-  toLineIndex?: Maybe<Scalars["Int"]["output"]>;
-  type: LegacyAnchorType;
-  wordOffset?: Maybe<Scalars["Int"]["output"]>;
-};
-
-export type LegacyNoteAnchorInput = {
-  fromLineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  lineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  toLineIndex?: InputMaybe<Scalars["Int"]["input"]>;
-  type: LegacyAnchorType;
-  wordOffset?: InputMaybe<Scalars["Int"]["input"]>;
-};
 
 export type MapViewPreferences = {
   /** Font scale factor (0.5 - 2.0) */
@@ -182,14 +132,10 @@ export type MusicalMode =
   | "PHRYGIAN";
 
 export type Mutation = {
-  /** Create a new section note */
-  createSectionNote: SectionNotePayload;
   /** Create a new song */
   createSong: SongPayload;
   /** Create a new song version */
   createSongVersion: SongVersionPayload;
-  /** Delete a section note (soft delete) */
-  deleteSectionNote: DeletePayload;
   /** Delete a song (soft delete) */
   deleteSong: SongPayload;
   /** Delete a song map item (soft delete) */
@@ -200,8 +146,6 @@ export type Mutation = {
   reorderSongMapItems: SongMapItemListPayload;
   /** Update current user preferences */
   updateMePreferences: UserPreferencesPayload;
-  /** Update a section note */
-  updateSectionNote: SectionNotePayload;
   /** Update an existing song */
   updateSong: SongPayload;
   /** Update an existing song version */
@@ -210,20 +154,12 @@ export type Mutation = {
   upsertSongMapItem: SongMapItemPayload;
 };
 
-export type MutationCreateSectionNoteArgs = {
-  input: CreateSectionNoteInput;
-};
-
 export type MutationCreateSongArgs = {
   input: CreateSongInput;
 };
 
 export type MutationCreateSongVersionArgs = {
   input: CreateSongVersionInput;
-};
-
-export type MutationDeleteSectionNoteArgs = {
-  id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSongArgs = {
@@ -244,11 +180,6 @@ export type MutationReorderSongMapItemsArgs = {
 
 export type MutationUpdateMePreferencesArgs = {
   patch: UpdateUserPreferencesInput;
-};
-
-export type MutationUpdateSectionNoteArgs = {
-  id: Scalars["ID"]["input"];
-  patch: UpdateSectionNoteInput;
 };
 
 export type MutationUpdateSongArgs = {
@@ -275,12 +206,6 @@ export type Query = {
   health: HealthStatus;
   /** Get current user preferences */
   mePreferences: UserPreferences;
-  /** Get a section note by ID */
-  sectionNote?: Maybe<SectionNote>;
-  /** Get all notes for a version */
-  sectionNotes: Array<SectionNote>;
-  /** Get all notes for a specific section within a version */
-  sectionNotesBySection: Array<SectionNote>;
   /** Get a song by ID */
   song?: Maybe<Song>;
   /** Get a song map item by ID */
@@ -291,20 +216,6 @@ export type Query = {
   songVersions: Array<SongVersion>;
   /** Get all songs with optional search and pagination */
   songs: SongsResult;
-};
-
-export type QuerySectionNoteArgs = {
-  id: Scalars["ID"]["input"];
-};
-
-export type QuerySectionNotesArgs = {
-  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
-  versionId: Scalars["ID"]["input"];
-};
-
-export type QuerySectionNotesBySectionArgs = {
-  sectionId: Scalars["ID"]["input"];
-  versionId: Scalars["ID"]["input"];
 };
 
 export type QuerySongArgs = {
@@ -346,54 +257,6 @@ export type ReorderSongMapItemsInput = {
   songVersionId: Scalars["ID"]["input"];
 };
 
-export type SectionBlock = {
-  chordProText: Scalars["String"]["output"];
-  id: Scalars["String"]["output"];
-  name: Scalars["String"]["output"];
-  notes?: Maybe<Array<EmbeddedSectionNote>>;
-};
-
-export type SectionBlockInput = {
-  chordProText: Scalars["String"]["input"];
-  id: Scalars["String"]["input"];
-  name: Scalars["String"]["input"];
-  notes?: InputMaybe<Array<EmbeddedSectionNoteInput>>;
-};
-
-export type SectionNote = {
-  anchor: Anchor;
-  createdAt: Scalars["String"]["output"];
-  deletedAt?: Maybe<Scalars["String"]["output"]>;
-  id: Scalars["ID"]["output"];
-  occurrenceId?: Maybe<Scalars["ID"]["output"]>;
-  ownerUid: Scalars["String"]["output"];
-  rev: Scalars["Int"]["output"];
-  schemaVersion: Scalars["Int"]["output"];
-  sectionId: Scalars["String"]["output"];
-  /** Note text (e.g., "Banda cresce", "Diminui") */
-  text: Scalars["String"]["output"];
-  updatedAt: Scalars["String"]["output"];
-  versionId: Scalars["String"]["output"];
-};
-
-export type SectionNotePayload = {
-  errors?: Maybe<Array<MutationError>>;
-  ok: Scalars["Boolean"]["output"];
-  sectionNote?: Maybe<SectionNote>;
-};
-
-export type SequenceItem = {
-  repeat?: Maybe<Scalars["Int"]["output"]>;
-  sectionId: Scalars["String"]["output"];
-  sequenceNotes?: Maybe<Array<Scalars["String"]["output"]>>;
-};
-
-export type SequenceItemInput = {
-  repeat?: InputMaybe<Scalars["Int"]["input"]>;
-  sectionId: Scalars["String"]["input"];
-  sequenceNotes?: InputMaybe<Array<Scalars["String"]["input"]>>;
-};
-
 export type Song = {
   artist?: Maybe<Scalars["String"]["output"]>;
   createdAt: Scalars["String"]["output"];
@@ -409,6 +272,7 @@ export type Song = {
 };
 
 export type SongMapItem = {
+  arrangementBlockId: Scalars["String"]["output"];
   createdAt: Scalars["String"]["output"];
   deletedAt?: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
@@ -417,7 +281,6 @@ export type SongMapItem = {
   ownerUid: Scalars["String"]["output"];
   rev: Scalars["Int"]["output"];
   schemaVersion: Scalars["Int"]["output"];
-  sectionId: Scalars["String"]["output"];
   songVersionId: Scalars["String"]["output"];
   updatedAt: Scalars["String"]["output"];
 };
@@ -470,12 +333,6 @@ export type SongsResult = {
 /** Major or minor quality */
 export type TonalQuality = "major" | "minor";
 
-export type UpdateSectionNoteInput = {
-  anchor?: InputMaybe<AnchorInput>;
-  occurrenceId?: InputMaybe<Scalars["ID"]["input"]>;
-  text?: InputMaybe<Scalars["String"]["input"]>;
-};
-
 export type UpdateSongInput = {
   artist?: InputMaybe<Scalars["String"]["input"]>;
   defaultVersionId?: InputMaybe<Scalars["String"]["input"]>;
@@ -494,9 +351,9 @@ export type UpdateUserPreferencesInput = {
 };
 
 export type UpsertSongMapItemInput = {
+  arrangementBlockId: Scalars["String"]["input"];
   labelOverride?: InputMaybe<Scalars["String"]["input"]>;
   order: Scalars["Int"]["input"];
-  sectionId: Scalars["String"]["input"];
   songVersionId: Scalars["String"]["input"];
 };
 
@@ -557,136 +414,6 @@ export type UpdateMePreferencesMutation = {
   };
 };
 
-export type SectionNoteFieldsFragment = {
-  id: string;
-  versionId: string;
-  sectionId: string;
-  text: string;
-  createdAt: string;
-  updatedAt: string;
-  rev: number;
-  anchor: {
-    type: AnchorType;
-    lineIndex?: number | null;
-    wordOffset?: number | null;
-    fromLineIndex?: number | null;
-    toLineIndex?: number | null;
-  };
-};
-
-export type SectionNotesQueryVariables = Exact<{
-  versionId: Scalars["ID"]["input"];
-}>;
-
-export type SectionNotesQuery = {
-  sectionNotes: Array<{
-    id: string;
-    versionId: string;
-    sectionId: string;
-    text: string;
-    createdAt: string;
-    updatedAt: string;
-    rev: number;
-    anchor: {
-      type: AnchorType;
-      lineIndex?: number | null;
-      wordOffset?: number | null;
-      fromLineIndex?: number | null;
-      toLineIndex?: number | null;
-    };
-  }>;
-};
-
-export type SectionNotesBySectionQueryVariables = Exact<{
-  versionId: Scalars["ID"]["input"];
-  sectionId: Scalars["ID"]["input"];
-}>;
-
-export type SectionNotesBySectionQuery = {
-  sectionNotesBySection: Array<{
-    id: string;
-    versionId: string;
-    sectionId: string;
-    text: string;
-    createdAt: string;
-    updatedAt: string;
-    rev: number;
-    anchor: {
-      type: AnchorType;
-      lineIndex?: number | null;
-      wordOffset?: number | null;
-      fromLineIndex?: number | null;
-      toLineIndex?: number | null;
-    };
-  }>;
-};
-
-export type CreateSectionNoteMutationVariables = Exact<{
-  input: CreateSectionNoteInput;
-}>;
-
-export type CreateSectionNoteMutation = {
-  createSectionNote: {
-    ok: boolean;
-    errors?: Array<{ message: string; field?: string | null }> | null;
-    sectionNote?: {
-      id: string;
-      versionId: string;
-      sectionId: string;
-      text: string;
-      createdAt: string;
-      updatedAt: string;
-      rev: number;
-      anchor: {
-        type: AnchorType;
-        lineIndex?: number | null;
-        wordOffset?: number | null;
-        fromLineIndex?: number | null;
-        toLineIndex?: number | null;
-      };
-    } | null;
-  };
-};
-
-export type UpdateSectionNoteMutationVariables = Exact<{
-  id: Scalars["ID"]["input"];
-  patch: UpdateSectionNoteInput;
-}>;
-
-export type UpdateSectionNoteMutation = {
-  updateSectionNote: {
-    ok: boolean;
-    errors?: Array<{ message: string; field?: string | null }> | null;
-    sectionNote?: {
-      id: string;
-      versionId: string;
-      sectionId: string;
-      text: string;
-      createdAt: string;
-      updatedAt: string;
-      rev: number;
-      anchor: {
-        type: AnchorType;
-        lineIndex?: number | null;
-        wordOffset?: number | null;
-        fromLineIndex?: number | null;
-        toLineIndex?: number | null;
-      };
-    } | null;
-  };
-};
-
-export type DeleteSectionNoteMutationVariables = Exact<{
-  id: Scalars["ID"]["input"];
-}>;
-
-export type DeleteSectionNoteMutation = {
-  deleteSectionNote: {
-    ok: boolean;
-    errors?: Array<{ message: string; field?: string | null }> | null;
-  };
-};
-
 export type SongFieldsFragment = {
   id: string;
   title: string;
@@ -726,27 +453,12 @@ export type VersionFieldsFragment = {
   updatedAt: string;
   rev: number;
   arrangement?: {
-    sections: Array<{
+    blocks: Array<{
       id: string;
-      name: string;
-      chordProText: string;
-      notes?: Array<{
-        id: string;
-        sectionId: string;
-        text: string;
-        anchor: {
-          type: LegacyAnchorType;
-          lineIndex?: number | null;
-          wordOffset?: number | null;
-          fromLineIndex?: number | null;
-          toLineIndex?: number | null;
-        };
-      }> | null;
-    }>;
-    sequence: Array<{
-      sectionId: string;
+      label?: string | null;
+      content: string;
+      order: number;
       repeat?: number | null;
-      sequenceNotes?: Array<string> | null;
     }>;
   } | null;
   reference?: {
@@ -899,27 +611,12 @@ export type SongVersionQuery = {
     updatedAt: string;
     rev: number;
     arrangement?: {
-      sections: Array<{
+      blocks: Array<{
         id: string;
-        name: string;
-        chordProText: string;
-        notes?: Array<{
-          id: string;
-          sectionId: string;
-          text: string;
-          anchor: {
-            type: LegacyAnchorType;
-            lineIndex?: number | null;
-            wordOffset?: number | null;
-            fromLineIndex?: number | null;
-            toLineIndex?: number | null;
-          };
-        }> | null;
-      }>;
-      sequence: Array<{
-        sectionId: string;
+        label?: string | null;
+        content: string;
+        order: number;
         repeat?: number | null;
-        sequenceNotes?: Array<string> | null;
       }>;
     } | null;
     reference?: {
@@ -990,48 +687,6 @@ export type DeleteSongVersionMutation = {
   };
 };
 
-export const SectionNoteFieldsFragmentDoc = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "FragmentDefinition",
-      name: { kind: "Name", value: "SectionNoteFields" },
-      typeCondition: {
-        kind: "NamedType",
-        name: { kind: "Name", value: "SectionNote" },
-      },
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          { kind: "Field", name: { kind: "Name", value: "id" } },
-          { kind: "Field", name: { kind: "Name", value: "versionId" } },
-          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "anchor" },
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
-                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "fromLineIndex" },
-                },
-                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
-              ],
-            },
-          },
-          { kind: "Field", name: { kind: "Name", value: "text" } },
-          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "rev" } },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SectionNoteFieldsFragment, unknown>;
 export const SongFieldsFragmentDoc = {
   kind: "Document",
   definitions: [
@@ -1136,92 +791,20 @@ export const VersionFieldsFragmentDoc = {
               selections: [
                 {
                   kind: "Field",
-                  name: { kind: "Name", value: "sections" },
+                  name: { kind: "Name", value: "blocks" },
                   selectionSet: {
                     kind: "SelectionSet",
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "label" } },
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "chordProText" },
+                        name: { kind: "Name", value: "content" },
                       },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "notes" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "id" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "sectionId" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "text" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "anchor" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "type" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "lineIndex" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "wordOffset" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "fromLineIndex",
-                                    },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: {
-                                      kind: "Name",
-                                      value: "toLineIndex",
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sequence" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "sectionId" },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "order" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "repeat" },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "sequenceNotes" },
                       },
                     ],
                   },
@@ -1469,518 +1052,6 @@ export const UpdateMePreferencesDocument = {
 } as unknown as DocumentNode<
   UpdateMePreferencesMutation,
   UpdateMePreferencesMutationVariables
->;
-export const SectionNotesDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SectionNotes" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "versionId" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sectionNotes" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "versionId" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "versionId" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "FragmentSpread",
-                  name: { kind: "Name", value: "SectionNoteFields" },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: "FragmentDefinition",
-      name: { kind: "Name", value: "SectionNoteFields" },
-      typeCondition: {
-        kind: "NamedType",
-        name: { kind: "Name", value: "SectionNote" },
-      },
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          { kind: "Field", name: { kind: "Name", value: "id" } },
-          { kind: "Field", name: { kind: "Name", value: "versionId" } },
-          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "anchor" },
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
-                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "fromLineIndex" },
-                },
-                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
-              ],
-            },
-          },
-          { kind: "Field", name: { kind: "Name", value: "text" } },
-          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "rev" } },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<SectionNotesQuery, SectionNotesQueryVariables>;
-export const SectionNotesBySectionDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SectionNotesBySection" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "versionId" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "sectionId" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sectionNotesBySection" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "versionId" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "versionId" },
-                },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sectionId" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "sectionId" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                {
-                  kind: "FragmentSpread",
-                  name: { kind: "Name", value: "SectionNoteFields" },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: "FragmentDefinition",
-      name: { kind: "Name", value: "SectionNoteFields" },
-      typeCondition: {
-        kind: "NamedType",
-        name: { kind: "Name", value: "SectionNote" },
-      },
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          { kind: "Field", name: { kind: "Name", value: "id" } },
-          { kind: "Field", name: { kind: "Name", value: "versionId" } },
-          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "anchor" },
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
-                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "fromLineIndex" },
-                },
-                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
-              ],
-            },
-          },
-          { kind: "Field", name: { kind: "Name", value: "text" } },
-          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "rev" } },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  SectionNotesBySectionQuery,
-  SectionNotesBySectionQueryVariables
->;
-export const CreateSectionNoteDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CreateSectionNote" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "input" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: { kind: "Name", value: "CreateSectionNoteInput" },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "createSectionNote" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "input" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "ok" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "errors" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "message" },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "field" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sectionNote" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "FragmentSpread",
-                        name: { kind: "Name", value: "SectionNoteFields" },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: "FragmentDefinition",
-      name: { kind: "Name", value: "SectionNoteFields" },
-      typeCondition: {
-        kind: "NamedType",
-        name: { kind: "Name", value: "SectionNote" },
-      },
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          { kind: "Field", name: { kind: "Name", value: "id" } },
-          { kind: "Field", name: { kind: "Name", value: "versionId" } },
-          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "anchor" },
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
-                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "fromLineIndex" },
-                },
-                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
-              ],
-            },
-          },
-          { kind: "Field", name: { kind: "Name", value: "text" } },
-          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "rev" } },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  CreateSectionNoteMutation,
-  CreateSectionNoteMutationVariables
->;
-export const UpdateSectionNoteDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "UpdateSectionNote" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: {
-            kind: "Variable",
-            name: { kind: "Name", value: "patch" },
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: { kind: "Name", value: "UpdateSectionNoteInput" },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "updateSectionNote" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "id" },
-                },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "patch" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "patch" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "ok" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "errors" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "message" },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "field" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sectionNote" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "FragmentSpread",
-                        name: { kind: "Name", value: "SectionNoteFields" },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
-      kind: "FragmentDefinition",
-      name: { kind: "Name", value: "SectionNoteFields" },
-      typeCondition: {
-        kind: "NamedType",
-        name: { kind: "Name", value: "SectionNote" },
-      },
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          { kind: "Field", name: { kind: "Name", value: "id" } },
-          { kind: "Field", name: { kind: "Name", value: "versionId" } },
-          { kind: "Field", name: { kind: "Name", value: "sectionId" } },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "anchor" },
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "type" } },
-                { kind: "Field", name: { kind: "Name", value: "lineIndex" } },
-                { kind: "Field", name: { kind: "Name", value: "wordOffset" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "fromLineIndex" },
-                },
-                { kind: "Field", name: { kind: "Name", value: "toLineIndex" } },
-              ],
-            },
-          },
-          { kind: "Field", name: { kind: "Name", value: "text" } },
-          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-          { kind: "Field", name: { kind: "Name", value: "rev" } },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  UpdateSectionNoteMutation,
-  UpdateSectionNoteMutationVariables
->;
-export const DeleteSectionNoteDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "DeleteSectionNote" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "deleteSectionNote" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: {
-                  kind: "Variable",
-                  name: { kind: "Name", value: "id" },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "ok" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "errors" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "message" },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "field" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  DeleteSectionNoteMutation,
-  DeleteSectionNoteMutationVariables
 >;
 export const SongsDocument = {
   kind: "Document",
@@ -2592,7 +1663,7 @@ export const SongVersionDocument = {
                     selections: [
                       {
                         kind: "Field",
-                        name: { kind: "Name", value: "sections" },
+                        name: { kind: "Name", value: "blocks" },
                         selectionSet: {
                           kind: "SelectionSet",
                           selections: [
@@ -2602,94 +1673,19 @@ export const SongVersionDocument = {
                             },
                             {
                               kind: "Field",
-                              name: { kind: "Name", value: "name" },
+                              name: { kind: "Name", value: "label" },
                             },
                             {
                               kind: "Field",
-                              name: { kind: "Name", value: "chordProText" },
+                              name: { kind: "Name", value: "content" },
                             },
                             {
                               kind: "Field",
-                              name: { kind: "Name", value: "notes" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "id" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "sectionId" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "text" },
-                                  },
-                                  {
-                                    kind: "Field",
-                                    name: { kind: "Name", value: "anchor" },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "lineIndex",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "wordOffset",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "fromLineIndex",
-                                          },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: {
-                                            kind: "Name",
-                                            value: "toLineIndex",
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "sequence" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "sectionId" },
+                              name: { kind: "Name", value: "order" },
                             },
                             {
                               kind: "Field",
                               name: { kind: "Name", value: "repeat" },
-                            },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "sequenceNotes" },
                             },
                           ],
                         },
